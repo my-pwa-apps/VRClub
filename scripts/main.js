@@ -424,52 +424,44 @@ function createBottle() {
 }
 
 function createLightBeam(position, color) {
-    // Create a cone-shaped beam with glow effect
     const beamGroup = new THREE.Group();
     
-    // Create the main beam cylinder
-    const coreGeometry = new THREE.CylinderGeometry(0.05, 0.3, 10, 16, 10, true);
+    // Create a taller beam that reaches the floor
+    const coreGeometry = new THREE.CylinderGeometry(0.05, 0.5, position.y * 2, 16, 8, true);
     const coreMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.3,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     
-    // Rotate the geometry to point down
-    coreGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    
+    coreGeometry.translate(0, -position.y, 0); // Move pivot to top
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     
-    // Create outer glow
-    const glowGeometry = new THREE.CylinderGeometry(0.1, 0.6, 10, 16, 1, true);
-    glowGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    // Create wider outer glow
+    const glowGeometry = new THREE.CylinderGeometry(0.1, 0.8, position.y * 2, 16, 1, true);
+    glowGeometry.translate(0, -position.y, 0);
     
     const glowMaterial = new THREE.ShaderMaterial({
         uniforms: {
             color: { value: new THREE.Color(color) },
-            viewVector: { value: new THREE.Vector3() }
+            viewVector: { value: camera.position }
         },
         vertexShader: `
-            varying vec3 vNormal;
-            varying vec3 vViewPosition;
+            varying vec3 vPosition;
             void main() {
-                vNormal = normalize(normalMatrix * normal);
-                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                vViewPosition = -mvPosition.xyz;
-                gl_Position = projectionMatrix * mvPosition;
+                vPosition = position;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
         fragmentShader: `
             uniform vec3 color;
-            uniform vec3 viewVector;
-            varying vec3 vNormal;
-            varying vec3 vViewPosition;
+            varying vec3 vPosition;
             void main() {
-                float intensity = pow(0.7 - dot(normalize(vNormal), normalize(viewVector)), 2.0);
-                gl_FragColor = vec4(color, intensity * 0.5);
+                float intensity = smoothstep(1.0, 0.0, abs(vPosition.y) / 10.0);
+                gl_FragColor = vec4(color, intensity * 0.3);
             }
         `,
         side: THREE.DoubleSide,
@@ -480,47 +472,9 @@ function createLightBeam(position, color) {
     
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
     
-    // Add dust particles inside beam
-    const dustGroup = new THREE.Group();
-    const dustMaterial = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.05,
-        transparent: true,
-        opacity: 0.4,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
-    
-    const dustCount = 50;
-    const dustPositions = new Float32Array(dustCount * 3);
-    
-    for (let i = 0; i < dustCount; i++) {
-        const theta = Math.random() * Math.PI * 2;
-        const radius = Math.random() * 0.1 + (Math.random() * 0.2 * (i / dustCount)); // Wider at bottom
-        const y = -(i / dustCount) * 10;
-        
-        dustPositions[i * 3] = Math.cos(theta) * radius;
-        dustPositions[i * 3 + 1] = y;
-        dustPositions[i * 3 + 2] = Math.sin(theta) * radius;
-    }
-    
-    const dustGeometry = new THREE.BufferGeometry();
-    dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
-    const dustParticles = new THREE.Points(dustGeometry, dustMaterial);
-    dustGroup.add(dustParticles);
-    
-    // Add everything to the group
     beamGroup.add(core);
     beamGroup.add(glow);
-    beamGroup.add(dustGroup);
     beamGroup.position.copy(position);
-    
-    // Add animation data
-    beamGroup.userData = {
-        dustParticles: dustParticles,
-        glowMaterial: glowMaterial,
-        initialPosition: position.clone(),
-    };
     
     return beamGroup;
 }
@@ -543,28 +497,18 @@ function createClubLighting() {
     // Colored moving spotlights
     const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xffff00];
     for (let i = 0; i < 5; i++) {
-        const spotLight = new THREE.SpotLight(colors[i], 2);
-        spotLight.position.set(-7 + i * 3.5, 9, 0);
-        spotLight.angle = Math.PI / 8;
-        spotLight.penumbra = 0.2;
-        spotLight.castShadow = true;
-        
-        scene.add(spotLight);
-        scene.add(spotLight.target);
-        
-        // Create enhanced light beam
-        const beam = createLightBeam(spotLight.position.clone(), colors[i]);
+        const position = new THREE.Vector3(-7 + i * 3.5, 9, 0);
+        const beam = createLightBeam(position, colors[i]);
         scene.add(beam);
         
         lights.push({
-            light: spotLight,
             beam: beam,
-            initialPos: new THREE.Vector3(-7 + i * 3.5, 9, 0),
+            initialPos: position.clone(),
             speed: 0.5 + Math.random() * 1.5,
             movementRadius: 2 + Math.random() * 3
         });
     }
-    
+
     // Create a dance floor with grid of colored lights
     const danceFloorSize = 10;
     const gridSize = 10;
@@ -849,46 +793,31 @@ function updateMovement(delta) {
 function updateLightingEffects(delta) {
     const time = clock.getElapsedTime();
     
-    // Check if it's time to change patterns
-    if (time - lastPatternChange > PATTERN_DURATION) {
-        currentPattern = (currentPattern + 1) % lightingPatterns.length;
-        lastPatternChange = time;
-    }
-
-    // Update lights based on current pattern
-    switch (currentPattern) {
-        case 0: // Synchronized wave
-            updateSynchronizedWave(time);
-            break;
-        case 1: // Random strobe
-            updateRandomStrobe(time);
-            break;
-        case 2: // Circular chase
-            updateCircularChase(time);
-            break;
-    }
+    lights.forEach(lightObj => {
+        if (lightObj.beam) {
+            // Update beam rotation and position based on pattern
+            const angle = time * lightObj.speed;
+            const x = lightObj.initialPos.x + Math.sin(angle) * lightObj.movementRadius;
+            const z = lightObj.initialPos.z + Math.cos(angle) * lightObj.movementRadius;
+            
+            lightObj.beam.position.x = x;
+            lightObj.beam.position.z = z;
+            
+            // Make beam point slightly away from center
+            const center = new THREE.Vector3(0, 0, 0);
+            const direction = new THREE.Vector3(x, 0, z).normalize();
+            const targetPos = new THREE.Vector3(
+                x + direction.x * 5,
+                0,
+                z + direction.z * 5
+            );
+            
+            lightObj.beam.lookAt(targetPos);
+        }
+    });
 
     // Update laser beams
     updateLaserBeams(time);
-
-    // Update view vectors for beam glow effects
-    const cameraPosition = camera.position.clone();
-    lights.forEach(lightObj => {
-        if (lightObj.beam && lightObj.beam.userData.glowMaterial) {
-            lightObj.beam.userData.glowMaterial.uniforms.viewVector.value.copy(cameraPosition);
-            
-            // Animate dust particles inside beam
-            if (lightObj.beam.userData.dustParticles) {
-                const positions = lightObj.beam.userData.dustParticles.geometry.attributes.position;
-                for (let i = 0; i < positions.count; i++) {
-                    // Add some jitter to dust positions
-                    positions.array[i * 3] += (Math.random() - 0.5) * 0.005;
-                    positions.array[i * 3 + 2] += (Math.random() - 0.5) * 0.005;
-                }
-                positions.needsUpdate = true;
-            }
-        }
-    });
 }
 
 function updateSmokeEffects(delta) {
