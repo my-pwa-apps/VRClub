@@ -40,12 +40,12 @@ async function init() {
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2;
 
-    // Increase ambient light for better visibility
-    const ambient = new THREE.AmbientLight(0x333333, 0.5); // Brighter ambient light
+    // Make ambient light much dimmer for a darker atmosphere
+    const ambient = new THREE.AmbientLight(0x111111, 0.15); // Reduced intensity
     scene.add(ambient);
     
-    // Add fill light to illuminate the environment
-    const fillLight = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5);
+    // Reduce the hemisphere light intensity for darker environment
+    const fillLight = new THREE.HemisphereLight(0x4444ff, 0x222211, 0.1); // Much less intensity
     scene.add(fillLight);
 
     // Check for WebGL compatibility
@@ -116,17 +116,17 @@ function onKeyUp(event) {
 }
 
 async function createClubEnvironment() {
-    // Create materials with emissive properties for visibility in the dark
+    // Create materials with reduced emissive properties for a darker club
     const materials = {
         floor: new THREE.MeshStandardMaterial({
-            color: 0x555555,
-            emissive: 0x111111, // Slight glow
+            color: 0x222222, // Darker floor
+            emissive: 0x050505, // Very slight glow
             metalness: 0.2,
             roughness: 0.8
         }),
         wall: new THREE.MeshStandardMaterial({
-            color: 0x888888,
-            emissive: 0x222222, // Slight glow
+            color: 0x444444, // Darker walls
+            emissive: 0x050505, // Very slight glow
             metalness: 0.0,
             roughness: 1.0
         })
@@ -162,10 +162,8 @@ async function createClubEnvironment() {
         console.warn('Could not load wood texture, using fallback:', error);
     }
 
-    // Add directional fill light to illuminate the space
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    dirLight.position.set(0, 8, 2);
-    scene.add(dirLight);
+    // Remove the directional fill light to make club darker
+    // Let the armature lights provide the primary illumination
 }
 
 function createBasicStructure(materials) {
@@ -219,12 +217,10 @@ function createBasicStructure(materials) {
     ceiling.position.set(0, 10, 0);
     scene.add(ceiling);
     
-    // Add some dim point lights around the environment
+    // Remove or significantly reduce point lights
+    // Only keep minimal lighting for DJ booth visibility
     const pointLights = [
-        { pos: [0, 5, 0], color: 0x666666, intensity: 0.5 },
-        { pos: [5, 2, 5], color: 0x666666, intensity: 0.3 },
-        { pos: [-5, 2, 5], color: 0x666666, intensity: 0.3 },
-        { pos: [0, 2, -8], color: 0x666666, intensity: 0.5 } // DJ booth
+        { pos: [0, 2, -8], color: 0x333333, intensity: 0.3 } // Only keep DJ booth light at reduced intensity
     ];
     
     pointLights.forEach(light => {
@@ -373,6 +369,11 @@ function updateLightArmatures(time) {
     
     const floorY = 0; // Y position of the floor
     
+    // Calculate a single color for all lights based on time
+    // This makes all lights change color together
+    const hue = (Math.sin(time * 0.1) + 1) / 2;
+    const sharedColor = new THREE.Color().setHSL(hue, 1.0, 0.5);
+    
     for (let i = 0; i < lightArmatures.length; i++) {
         const fixture = lightArmatures[i];
         
@@ -386,6 +387,20 @@ function updateLightArmatures(time) {
         // Apply rotation to the head
         fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2;
         fixture.head.rotation.z = Math.cos(time * speed * 0.7 + phaseZ) * 0.5;
+        
+        // Update color of spotlight and beam to the shared color
+        if (fixture.spotlight) {
+            fixture.spotlight.color.copy(sharedColor);
+            // Increase spotlight intensity to compensate for darker environment
+            fixture.spotlight.intensity = 7.0 + Math.sin(time * 2) * 1.0;
+        }
+        
+        if (fixture.lens && fixture.lens.material) {
+            fixture.lens.material.color.copy(sharedColor);
+            if (fixture.lens.material.emissive) {
+                fixture.lens.material.emissive.copy(sharedColor);
+            }
+        }
         
         // Update beam to extend to floor based on current rotation
         if (fixture.beam && fixture.position) {
@@ -408,7 +423,7 @@ function updateLightArmatures(time) {
                 
                 // Update opacity based on time
                 if (fixture.beam.material) {
-                    fixture.beam.material.opacity = 0.1 + Math.sin(time * 2 + i) * 0.05;
+                    fixture.beam.material.opacity = 0.25 + Math.sin(time * 2 + i) * 0.05;
                 }
             }
         }
@@ -679,8 +694,8 @@ function createDJBooth() {
     
     scene.add(booth);
     
-    // Add extra light to illuminate the DJ booth
-    const boothLight = new THREE.SpotLight(0xffffff, 0.8);
+    // Add extra light to illuminate the DJ booth with more intensity
+    const boothLight = new THREE.SpotLight(0xffffff, 1.2); // Increased intensity
     boothLight.position.set(0, 5, -6);
     boothLight.target.position.set(0, 0, -8);
     boothLight.angle = Math.PI / 6;
@@ -942,56 +957,6 @@ function updateMovement(delta) {
     if (camera.position.x < -9.5) camera.position.x = -9.5;
     if (camera.position.z < -9.5) camera.position.z = -9.5;
     if (camera.position.z > 9.5) camera.position.z = 9.5;
-}
-
-// Simplified update function
-function updateLightArmatures(time) {
-    if (!lightArmatures || lightArmatures.length === 0) {
-        return;
-    }
-    
-    const floorY = 0; // Y position of the floor
-    
-    for (let i = 0; i < lightArmatures.length; i++) {
-        const fixture = lightArmatures[i];
-        
-        if (!fixture || !fixture.head) continue;
-        
-        // Calculate rotation for this fixture
-        const speed = 0.15 + (i % 5) * 0.05;
-        const phaseX = i * 0.5;
-        const phaseZ = i * 0.7;
-        
-        // Apply rotation to the head
-        fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2;
-        fixture.head.rotation.z = Math.cos(time * speed * 0.7 + phaseZ) * 0.5;
-        
-        // Update beam to extend to floor based on current rotation
-        if (fixture.beam && fixture.position) {
-            // Get the world position and direction of the spotlight
-            const lightWorldPos = new THREE.Vector3();
-            fixture.head.getWorldPosition(lightWorldPos);
-            
-            // Calculate direction vector based on head rotation
-            const direction = new THREE.Vector3(0, -1, 0);
-            direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
-            
-            // Simple floor intersection calculation
-            // Distance to floor = (lightWorldPos.y - floorY) / direction.y
-            const distance = (lightWorldPos.y - floorY) / -direction.y;
-            
-            // Update beam length and scale to reach the floor
-            if (distance > 0 && fixture.beam.geometry) {
-                // Scale the beam to match the required length
-                fixture.beam.scale.y = distance / fixture.beamLength;
-                
-                // Update opacity based on time
-                if (fixture.beam.material) {
-                    fixture.beam.material.opacity = 0.1 + Math.sin(time * 2 + i) * 0.05;
-                }
-            }
-        }
-    }
 }
 
 init().catch(console.error);
