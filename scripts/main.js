@@ -916,7 +916,7 @@ function animate() {
         const time = clock.getElapsedTime();
         
         updateMovement(delta);
-        updateLightArmatures(time);
+        updateLightArmatures(time); // This now calls the correct function
         
         if (controls && typeof controls.update === 'function') {
             controls.update();
