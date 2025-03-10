@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VR Techno Club</title>
     <link rel="stylesheet" href="styles/main.css">
+    <script>
+        // Helper to download Three.js files
+        async function downloadThreeJS() {
+            const files = [
+                {
+                    url: 'https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.module.js',
+                    path: 'lib/three.module.js'
+                },
+                {
+                    url: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/jsm/controls/OrbitControls.js',
+                    path: 'lib/OrbitControls.js'
+                },
+                {
+                    url: 'https://cdn.jsdelivr.net/npm/three@0.147.0/examples/jsm/webxr/VRButton.js',
+                    path: 'lib/VRButton.js'
+                }
+            ];
+            
+            console.log('Downloading Three.js files to lib directory...');
+            // Note: This will only work on a server with write access.
+            // For development, manually download these files.
+        }
+    </script>
 </head>
 <body>
     <canvas id="club-scene"></canvas>
