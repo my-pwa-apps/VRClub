@@ -330,6 +330,7 @@ function createBasicStructure(materials) {
 }
 
 // Completely rewritten light armature creation function
+
 function createLightingArmatures() {
     console.log('Creating lighting armatures with realistic beams...');
     
@@ -344,8 +345,8 @@ function createLightingArmatures() {
     const mainTrussGeometry = new THREE.BoxGeometry(0.2, 0.2, 20);
     const crossTrussGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.5);
     
-    // Create trusses
-    [-7, -3.5, 0, 3.5, 7].forEach(x => {
+    // Reduce number of trusses and lights for less visual clutter
+    [-7, 0, 7].forEach(x => {  // Reduced from 5 trusses to 3
         // Main truss beam
         const truss = new THREE.Mesh(mainTrussGeometry, trussMaterial);
         truss.position.set(x, 9.8, 0);
@@ -360,8 +361,8 @@ function createLightingArmatures() {
         
         scene.add(truss);
         
-        // Add light fixtures with realistic beams
-        [-8, -4, 0, 4, 8].forEach(z => {
+        // Reduce number of lights per truss
+        [-8, 0, 8].forEach(z => {  // Reduced from 5 lights to 3 per truss
             // Use more vibrant base colors
             const initialColor = new THREE.Color().setHSL(Math.random(), 1.0, 0.5);
             
@@ -598,7 +599,7 @@ function createRealisticLightFixture(position, color) {
     };
 }
 
-// Optimized function to update light beams
+// Optimized function to update light beams with proper surface collision
 function updateLightArmatures(time) {
     if (!lightArmatures || lightArmatures.length === 0) return;
     
@@ -609,9 +610,22 @@ function updateLightArmatures(time) {
     // Create a raycaster for beam length calculation
     const raycaster = new THREE.Raycaster();
     
-    // Get floor and relevant objects once outside the loop
-    const floor = scene.children.find(obj => 
-        obj.position.y === 0 && obj.geometry instanceof THREE.PlaneGeometry);
+    // Collect all possible collision objects once
+    const collisionObjects = [];
+    scene.traverse(object => {
+        // Include any mesh that isn't a light component, beam, or particle
+        if (object.isMesh && 
+            !object.userData.isLight && 
+            !object.userData.isBeam && 
+            !object.userData.isParticle &&
+            object.visible) {
+            
+            // Exclude mirror ball faces to prevent beam scatter
+            if (!object.parent || object.parent.userData.rotationSpeed === undefined) {
+                collisionObjects.push(object);
+            }
+        }
+    });
     
     // Update each light
     for (let i = 0; i < lightArmatures.length; i++) {
@@ -660,7 +674,7 @@ function updateLightArmatures(time) {
                 }
             });
             
-            // Calculate beam intersection with floor
+            // Calculate beam origin and direction
             const lightPos = new THREE.Vector3();
             fixture.housing.getWorldPosition(lightPos);
             
@@ -668,25 +682,26 @@ function updateLightArmatures(time) {
             direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
             direction.normalize();
             
-            // Set up raycaster for floor intersection
+            // Set up raycaster to detect all collisions
             raycaster.set(lightPos, direction);
             
-            // Cast ray to floor
-            const floorIntersects = raycaster.intersectObject(floor);
+            // Find the closest intersection with any surface
+            const intersects = raycaster.intersectObjects(collisionObjects);
             
-            if (floorIntersects.length > 0) {
-                const distance = floorIntersects[0].distance;
+            if (intersects.length > 0) {
+                // Get the closest intersection point
+                const intersection = intersects[0];
+                const distance = intersection.distance;
                 
-                // Scale all beam layers to floor intersection
-                fixture.beams.forEach(beam => {
-                    beam.scale.y = distance * 0.95; // Slight adjustment to prevent z-fighting
+                // Scale beams precisely to hit the surface exactly
+                fixture.beams.forEach((beam, index) => {
+                    // Add a tiny offset to prevent z-fighting based on beam layer
+                    const zOffset = 0.01 * index;
+                    beam.scale.y = distance - zOffset;
                 });
                 
-                // Make spot on floor by creating a light spot
-                const spotOnFloor = floorIntersects[0].point;
-                
-                // Find or create floor spot light
-                if (!fixture.floorSpot) {
+                // Create light spot on the surface
+                if (!fixture.surfaceSpot) {
                     const spotMaterial = new THREE.MeshBasicMaterial({
                         color: sharedColor,
                         transparent: true,
@@ -699,40 +714,80 @@ function updateLightArmatures(time) {
                         new THREE.CircleGeometry(0.5, 16),
                         spotMaterial
                     );
-                    spot.rotation.x = -Math.PI/2;
-                    spot.position.y = 0.01; // Just above floor
-                    
                     scene.add(spot);
-                    fixture.floorSpot = spot;
+                    fixture.surfaceSpot = spot;
                 }
                 
-                // Update floor spot
-                if (fixture.floorSpot) {
-                    fixture.floorSpot.position.x = spotOnFloor.x;
-                    fixture.floorSpot.position.z = spotOnFloor.z;
-                    fixture.floorSpot.material.color.copy(sharedColor);
+                // Update spot
+                if (fixture.surfaceSpot) {
+                    const hitPoint = intersection.point;
+                    const normal = intersection.face ? intersection.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+                    normal.transformDirection(intersection.object.matrixWorld);
                     
-                    // Pulse the size of the spot with the beat
-                    const spotSize = 0.3 + Math.sin(time * 2) * 0.1 + (distance * 0.1);
-                    fixture.floorSpot.scale.set(spotSize, spotSize, 1);
+                    // Position spot slightly above surface to prevent z-fighting
+                    fixture.surfaceSpot.position.copy(hitPoint);
+                    fixture.surfaceSpot.position.addScaledVector(normal, 0.01);
                     
-                    // Adjust opacity based on angle - more perpendicular = more visible
-                    const dotProduct = Math.abs(direction.dot(new THREE.Vector3(0, 1, 0)));
-                    fixture.floorSpot.material.opacity = 0.7 * dotProduct;
+                    // Orient spot along the surface normal
+                    fixture.surfaceSpot.lookAt(hitPoint.clone().add(normal));
+                    
+                    // Update spot color and size
+                    fixture.surfaceSpot.material.color.copy(sharedColor);
+                    
+                    // Calculate spot size based on distance and angle
+                    const spotSize = 0.3 + (distance * 0.05);
+                    fixture.surfaceSpot.scale.set(spotSize, spotSize, 1);
+                    
+                    // Adjust opacity based on angle
+                    const dotProduct = Math.abs(normal.dot(direction));
+                    fixture.surfaceSpot.material.opacity = 0.7 * (1 - dotProduct);
+                    
+                    // Flatten spot when hitting wall vs floor
+                    if (normal.y > 0.9) {
+                        // Floor - keep circular
+                        fixture.surfaceSpot.scale.x = fixture.surfaceSpot.scale.y;
+                    } else {
+                        // Wall - make more elliptical
+                        fixture.surfaceSpot.scale.x = spotSize * 1.5; 
+                    }
+                    
+                    // Make spot visible
+                    fixture.surfaceSpot.visible = true;
                 }
+                
+                // Calculate dust illumination to show beam volume
+                if (stationaryDust) {
+                    illuminateStationaryDustParticles(
+                        lightPos,
+                        direction,
+                        sharedColor,
+                        time,
+                        distance  // Pass distance to limit illumination to beam length
+                    );
+                }
+            } else {
+                // If no intersection, hide the spot
+                if (fixture.surfaceSpot) {
+                    fixture.surfaceSpot.visible = false;
+                }
+                
+                // Set a default maximum length
+                const defaultLength = 40;
+                fixture.beams.forEach(beam => {
+                    beam.scale.y = defaultLength;
+                });
             }
         }
     }
 }
 
 // New function to illuminate stationary dust particles when beams pass through them
-function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor, time) {
+function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor, time, beamLength = 20) {
     if (!stationaryDust) return;
     
     const beamRadius = 0.5; // Effective radius of the beam
-    const beamLength = 20;   // Maximum beam length
     
-    // Create beam line for testing
+    // Create beam line for testing - limited to actual beam length
     const beamEnd = beamOrigin.clone().addScaledVector(beamDirection, beamLength);
     const beamLine = new THREE.Line3(beamOrigin, beamEnd);
     
@@ -745,8 +800,11 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
         // Calculate distance from particle to closest point on beam
         const distance = particle.position.distanceTo(closestPoint);
         
-        // If particle is close enough to beam, illuminate it
-        if (distance < beamRadius) {
+        // Check if point is within beam length (distance from origin to closest point)
+        const distanceFromOrigin = beamOrigin.distanceTo(closestPoint);
+        
+        // If particle is close enough to beam and within beam length, illuminate it
+        if (distance < beamRadius && distanceFromOrigin <= beamLength) {
             // Calculate intensity based on distance (closer = brighter)
             const intensity = 1.0 - (distance / beamRadius);
             
