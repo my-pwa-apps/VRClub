@@ -1,4 +1,4 @@
-import { NPCManager } from '../../scripts/npc/NPCManager.js';
+import { NPCManager } from './NPCManager.js';
 
 export class CharacterSystem {
     constructor(scene) {
