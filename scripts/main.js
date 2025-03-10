@@ -415,33 +415,58 @@ function createBottle() {
     return bottleGroup;
 }
 
+function createLightFixture(position, color) {
+    const fixtureGroup = new THREE.Group();
+    
+    // Create metal housing
+    const housing = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.2, 0.4, 8),
+        new THREE.MeshStandardMaterial({ 
+            color: 0x111111, 
+            metalness: 0.9,
+            roughness: 0.2
+        })
+    );
+    
+    // Create lens
+    const lens = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.15, 0.1, 16),
+        new THREE.MeshPhysicalMaterial({
+            color: color,
+            metalness: 0,
+            roughness: 0.1,
+            transparent: true,
+            opacity: 0.5,
+            emissive: color,
+            emissiveIntensity: 0.5
+        })
+    );
+    lens.position.y = -0.15;
+    
+    housing.add(lens);
+    fixtureGroup.add(housing);
+    fixtureGroup.position.copy(position);
+    return fixtureGroup;
+}
+
 function createLightBeam(position, color) {
     const beamGroup = new THREE.Group();
     
-    // Add spotlight as source
+    // Create fixture
+    const fixture = createLightFixture(position, color);
+    beamGroup.add(fixture);
+    
+    // Add spotlight
     const spotlight = new THREE.SpotLight(color, 2);
     spotlight.position.copy(position);
     spotlight.angle = Math.PI / 12;
     spotlight.penumbra = 0.3;
     spotlight.decay = 1;
-    spotlight.distance = 20;
+    spotlight.distance = position.y * 2;
     
-    // Add lens flare effect
-    const textureLoader = new THREE.TextureLoader();
-    const textureFlare = textureLoader.load('https://threejs.org/examples/textures/lensflare/lensflare0.png');
-    
-    const lensflare = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: textureFlare,
-        color: color,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        opacity: 0.5,
-    }));
-    lensflare.scale.set(0.5, 0.5, 1);
-    lensflare.position.copy(position);
-    
-    // Create beam core
-    const coreGeometry = new THREE.CylinderGeometry(0.1, 0.8, position.y * 2, 16, 8, true);
+    // Create full-length beam geometry
+    const height = position.y;
+    const coreGeometry = new THREE.CylinderGeometry(0.05, 0.4, height, 16, 8, true);
     const coreMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
@@ -451,35 +476,34 @@ function createLightBeam(position, color) {
         depthWrite: false
     });
     
-    coreGeometry.translate(0, -position.y, 0);
+    // Move pivot point to top
+    coreGeometry.translate(0, -height/2, 0);
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     
-    // Create volumetric light effect
-    const volumetricGeometry = new THREE.CylinderGeometry(0.2, 1.2, position.y * 2, 16, 16, true);
-    volumetricGeometry.translate(0, -position.y, 0);
+    // Create volumetric light cone
+    const volumetricGeometry = new THREE.CylinderGeometry(0.1, 0.8, height, 16, 8, true);
+    volumetricGeometry.translate(0, -height/2, 0);
     
     const volumetricMaterial = new THREE.ShaderMaterial({
         uniforms: {
             color: { value: new THREE.Color(color) },
-            viewVector: { value: camera.position }
+            viewVector: { value: camera.position },
+            beamHeight: { value: height }
         },
         vertexShader: `
             varying vec3 vPosition;
-            varying vec3 vNormal;
             void main() {
                 vPosition = position;
-                vNormal = normal;
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
         fragmentShader: `
             uniform vec3 color;
+            uniform float beamHeight;
             varying vec3 vPosition;
-            varying vec3 vNormal;
             void main() {
-                float intensity = pow(0.7 - dot(normalize(vNormal), vec3(0, -1, 0)), 2.0);
-                float falloff = 1.0 - abs(vPosition.y) / 10.0;
-                gl_FragColor = vec4(color, intensity * falloff * 0.15);
+                float intensity = smoothstep(beamHeight, 0.0, abs(vPosition.y));
+                gl_FragColor = vec4(color, intensity * 0.2);
             }
         `,
         transparent: true,
@@ -490,20 +514,35 @@ function createLightBeam(position, color) {
     
     const volumetricBeam = new THREE.Mesh(volumetricGeometry, volumetricMaterial);
     
+    // Add floor spot
+    const floorSpot = new THREE.Mesh(
+        new THREE.CircleGeometry(0.8, 16),
+        new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.3,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    floorSpot.rotation.x = -Math.PI / 2;
+    floorSpot.position.y = -height;
+    
     beamGroup.add(core);
     beamGroup.add(volumetricBeam);
     beamGroup.add(spotlight);
     beamGroup.add(spotlight.target);
-    scene.add(lensflare); // Add lensflare directly to scene
+    beamGroup.add(floorSpot);
     
     beamGroup.position.copy(position);
     
     return {
         group: beamGroup,
+        fixture: fixture,
         spotlight: spotlight,
-        lensflare: lensflare,
         core: core,
-        volumetric: volumetricBeam
+        volumetric: volumetricBeam,
+        floorSpot: floorSpot
     };
 }
 
@@ -524,19 +563,26 @@ function createClubLighting() {
     
     // Colored moving lights with beams
     const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xffff00];
-    for (let i = 0; i < 5; i++) {
-        const position = new THREE.Vector3(-7 + i * 3.5, 9, 0);
-        const beam = createLightBeam(position, colors[i]);
+    const positions = [
+        new THREE.Vector3(-7, 9.8, 0),
+        new THREE.Vector3(-3.5, 9.8, 0),
+        new THREE.Vector3(0, 9.8, 0),
+        new THREE.Vector3(3.5, 9.8, 0),
+        new THREE.Vector3(7, 9.8, 0)
+    ];
+    
+    positions.forEach((pos, i) => {
+        const beam = createLightBeam(pos, colors[i]);
         scene.add(beam.group);
         
         lights.push({
             ...beam,
-            initialPos: position.clone(),
+            initialPos: pos.clone(),
             speed: 0.5 + Math.random() * 1.5,
             movementRadius: 2 + Math.random() * 3,
             color: colors[i]
         });
-    }
+    });
 }
 
 function createLasers() {
@@ -683,28 +729,24 @@ function updateLightingEffects(delta) {
     
     lights.forEach(lightObj => {
         if (lightObj.group) {
-            // Update beam position and rotation
             const angle = time * lightObj.speed;
-            const x = lightObj.initialPos.x + Math.sin(angle) * lightObj.movementRadius;
-            const z = lightObj.initialPos.z + Math.cos(angle) * lightObj.movementRadius;
             
-            // Calculate floor target point
-            const floorTarget = new THREE.Vector3(
-                x + Math.sin(angle * 0.5) * 3,
-                0,
-                z + Math.cos(angle * 0.5) * 3
-            );
+            // Keep fixture stationary, only rotate beam
+            const targetX = lightObj.initialPos.x + Math.sin(angle) * lightObj.movementRadius;
+            const targetZ = lightObj.initialPos.z + Math.cos(angle) * lightObj.movementRadius;
             
-            // Update spotlight
-            lightObj.spotlight.position.set(x, lightObj.initialPos.y, z);
+            const floorTarget = new THREE.Vector3(targetX, 0, targetZ);
+            
+            // Update spotlight and its target
             lightObj.spotlight.target.position.copy(floorTarget);
             
-            // Update beam and effects
-            lightObj.group.position.set(x, lightObj.initialPos.y, z);
+            // Calculate direction for beam rotation
+            const direction = floorTarget.clone().sub(lightObj.group.position).normalize();
             lightObj.group.lookAt(floorTarget);
             
-            // Update lensflare position
-            lightObj.lensflare.position.set(x, lightObj.initialPos.y, z);
+            // Update floor spot position
+            lightObj.floorSpot.position.x = targetX - lightObj.initialPos.x;
+            lightObj.floorSpot.position.z = targetZ - lightObj.initialPos.z;
             
             // Pulse intensity
             const pulseIntensity = 1.5 + Math.sin(time * 2) * 0.5;
