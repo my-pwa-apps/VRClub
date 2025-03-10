@@ -11,6 +11,77 @@ let lightArmatures = [];
 let dancers = [];
 let stationaryDust; // Add this global variable declaration
 
+function createStationaryDustParticles() {
+    const particles = new THREE.Group();
+    const particleCount = 300;
+    const volume = new THREE.Box3(
+        new THREE.Vector3(-8, 0, -8),
+        new THREE.Vector3(8, 7, 8)
+    );
+    
+    // Create a shared geometry for performance
+    const particleGeometry = new THREE.SphereGeometry(0.02, 4, 4);
+    
+    // Create a collection of materials with different opacities
+    const materials = [
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.3,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.2,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.1,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    ];
+    
+    for (let i = 0; i < particleCount; i++) {
+        const material = materials[Math.floor(Math.random() * materials.length)].clone();
+        const particle = new THREE.Mesh(particleGeometry, material);
+        
+        // Position randomly within the volume
+        particle.position.set(
+            volume.min.x + Math.random() * (volume.max.x - volume.min.x),
+            volume.min.y + Math.random() * (volume.max.y - volume.min.y),
+            volume.min.z + Math.random() * (volume.max.z - volume.min.z)
+        );
+        
+        // Random scale for variety
+        const scale = 0.3 + Math.random() * 0.7;
+        particle.scale.set(scale, scale, scale);
+        
+        // Store original color and state
+        particle.userData = {
+            originalOpacity: material.opacity,
+            illuminated: false,
+            illuminationColor: new THREE.Color(),
+            illuminationIntensity: 0,
+            driftVelocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.002,
+                (Math.random() - 0.5) * 0.001,
+                (Math.random() - 0.5) * 0.002
+            )
+        };
+        
+        particles.add(particle);
+    }
+    
+    scene.add(particles);
+    return particles;
+}
+
 async function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
@@ -149,6 +220,9 @@ async function createClubEnvironment() {
         })
     };
 
+    // Initialize stationary dust
+    stationaryDust = createStationaryDustParticles();
+
     // Create basic structure with improved materials
     createBasicStructure(materials);
     createDJBooth();
@@ -189,81 +263,6 @@ async function createClubEnvironment() {
     // Let the armature lights provide the primary illumination
 
     // Add this to your init or createClubEnvironment function
-    const stationaryDust = createStationaryDustParticles();
-}
-
-// Add mirror ball function
-function createMirrorBall() {
-    // Create a mirror ball geometry
-    const ballGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-    
-    // Create a highly reflective material for the mirror ball
-    const ballMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        metalness: 1.0,
-        roughness: 0.1,
-        envMapIntensity: 1.0
-    });
-    
-    // Create small mirror faces to simulate disco ball
-    const facesGroup = new THREE.Group();
-    const faceCount = 150; // Number of mirror faces
-    
-    for (let i = 0; i < faceCount; i++) {
-        // Create a small reflective quad for each mirror face
-        const faceGeometry = new THREE.PlaneGeometry(0.08, 0.08);
-        const faceMaterial = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
-            metalness: 1.0,
-            roughness: 0.05,
-            envMapIntensity: 1.5
-        });
-        
-        const face = new THREE.Mesh(faceGeometry, faceMaterial);
-        
-        // Position randomly on the sphere
-        const phi = Math.acos(-1 + 2 * Math.random());
-        const theta = 2 * Math.PI * Math.random();
-        
-        face.position.x = 0.5 * Math.sin(phi) * Math.cos(theta);
-        face.position.y = 0.5 * Math.sin(phi) * Math.sin(theta);
-        face.position.z = 0.5 * Math.cos(phi);
-        
-        // Orient face outward from the center
-        face.lookAt(0, 0, 0);
-        face.position.multiplyScalar(1.01); // Slightly outside the sphere
-        
-        facesGroup.add(face);
-    }
-    
-    // Create the core ball
-    const mirrorBall = new THREE.Mesh(ballGeometry, ballMaterial);
-    mirrorBall.add(facesGroup);
-    
-    // Position the ball in the club center
-    mirrorBall.position.set(0, 6, 0);
-    
-    // Add to scene with rotation info for animation
-    mirrorBall.userData = {
-        rotationSpeed: 0.05 // Controls the rotation speed
-    };
-    
-    scene.add(mirrorBall);
-    
-    // Create subtle point light in the ball to enhance reflections
-    const ballLight = new THREE.PointLight(0xffffff, 0.3);
-    ballLight.position.copy(mirrorBall.position);
-    scene.add(ballLight);
-    
-    // Create mirror ball projector light
-    const projectorLight = new THREE.SpotLight(0xffffff, 1.5);
-    projectorLight.position.set(0, 9.5, 0); // Just below ceiling
-    projectorLight.target = mirrorBall;
-    projectorLight.angle = Math.PI / 10;
-    projectorLight.penumbra = 0.2;
-    projectorLight.castShadow = false;
-    scene.add(projectorLight);
-    scene.add(projectorLight.target);
 }
 
 function createBasicStructure(materials) {
