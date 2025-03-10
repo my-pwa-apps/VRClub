@@ -48,6 +48,17 @@ async function init() {
     const fillLight = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5);
     scene.add(fillLight);
 
+    // Check for WebGL compatibility
+    if (!checkWebGLCompatibility()) {
+        document.getElementById('error').textContent = 'Your browser may not fully support WebGL. Try a different browser.';
+        document.getElementById('error').style.display = 'block';
+    }
+    
+    // Configure renderer with safer settings
+    renderer.outputEncoding = THREE.LinearEncoding; // Use simpler encoding
+    renderer.toneMapping = THREE.NoToneMapping; // Disable tone mapping
+    renderer.shadowMap.type = THREE.BasicShadowMap; // Use simpler shadow mapping
+
     try {
         await createClubEnvironment();
         setupEventListeners();
@@ -266,39 +277,30 @@ function getRandomColor() {
     return colors[Math.floor(Math.random() * colors.length)];
 }
 
+// Simplify the fixture creation to use simpler materials
 function createLightFixture(position, color) {
     const group = new THREE.Group();
     
-    // Base mount
+    // Create base with simpler material
     const base = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.15, 0.3),
-        new THREE.MeshStandardMaterial({
-            color: 0x222222, 
-            metalness: 0.9,
-            roughness: 0.2
-        })
+        new THREE.MeshLambertMaterial({ color: 0x222222 }) // Use Lambert instead of Standard
     );
     
     // Moving head
     const head = new THREE.Group();
     
-    // Light housing
+    // Light housing with simpler material
     const housing = new THREE.Mesh(
         new THREE.BoxGeometry(0.2, 0.4, 0.2),
-        new THREE.MeshStandardMaterial({
-            color: 0x333333,
-            metalness: 0.8,
-            roughness: 0.2
-        })
+        new THREE.MeshLambertMaterial({ color: 0x333333 }) // Use Lambert instead of Standard
     );
     
-    // Add lens that glows with light color - using MeshPhongMaterial instead of MeshBasicMaterial
+    // Lens with simpler material
     const lens = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.12, 0.05, 16),
-        new THREE.MeshPhongMaterial({
+        new THREE.MeshBasicMaterial({ // Use Basic instead of Phong
             color: color,
-            emissive: color,
-            emissiveIntensity: 1,
             transparent: true,
             opacity: 0.9
         })
@@ -306,41 +308,31 @@ function createLightFixture(position, color) {
     lens.rotation.x = Math.PI / 2;
     lens.position.set(0, -0.2, 0);
     
-    // Add spotlight that actually casts light
-    const spotlight = new THREE.SpotLight(color, 4);
+    // Create simplified spotlight
+    const spotlight = new THREE.SpotLight(color, 3);
     spotlight.position.set(0, -0.2, 0);
     spotlight.angle = Math.PI / 8;
-    spotlight.penumbra = 0.4;
-    spotlight.decay = 1.5;
+    spotlight.penumbra = 0.3;
     spotlight.distance = 20;
-    spotlight.castShadow = true;
+    spotlight.castShadow = false; // Disable shadow casting for performance
     
-    // Improve shadow quality
-    spotlight.shadow.mapSize.width = 512;
-    spotlight.shadow.mapSize.height = 512;
-    spotlight.shadow.bias = -0.001;
-    
-    // Create target for spotlight
     const target = new THREE.Object3D();
-    target.position.set(0, -10, 0); // Point down by default
+    target.position.set(0, -10, 0);
     spotlight.target = target;
     
-    // Create volumetric beam - keep as MeshBasicMaterial but remove emissive
-    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.8, 15, 16, 10, true);
-    const beamMaterial = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0.15,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
+    // Beam with simpler setup
+    const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.5, 10, 8, 1, true), // Simplified geometry
+        new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.DoubleSide
+        })
+    );
+    beam.position.y = -5;
     
-    // Position beam correctly
-    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-    beam.position.y = -7.5; // Position so the beam reaches the floor
-    
-    // Add elements to head
+    // Assemble the fixture
     head.add(housing);
     head.add(lens);
     head.add(spotlight);
@@ -348,16 +340,9 @@ function createLightFixture(position, color) {
     head.add(beam);
     head.position.y = -0.25;
     
-    // Add head to group
     group.add(base);
     group.add(head);
-    
-    // Position the fixture
     group.position.copy(position);
-    
-    // Add light particles in the beam for extra realism
-    const particles = createLightParticles(color);
-    head.add(particles);
     
     return {
         group,
@@ -366,8 +351,7 @@ function createLightFixture(position, color) {
         beam,
         lens,
         color,
-        target,
-        particles
+        target
     };
 }
 
@@ -828,28 +812,50 @@ function debounce(fn, ms) {
     };
 }
 
+// Check WebGL compatibility
+function checkWebGLCompatibility() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        
+        if (!gl) {
+            console.error('WebGL not supported');
+            return false;
+        }
+        
+        // Log WebGL capabilities for debugging
+        console.log('WebGL Vendor:', gl.getParameter(gl.VENDOR));
+        console.log('WebGL Renderer:', gl.getParameter(gl.RENDERER));
+        console.log('WebGL Version:', gl.getParameter(gl.VERSION));
+        
+        return true;
+    } catch (e) {
+        console.error('WebGL check error:', e);
+        return false;
+    }
+}
+
 function animate() {
-    const delta = clock.getDelta();
-    const time = clock.getElapsedTime();
-    
-    // Remove logging to reduce console spam
-    // console.log('Camera position:', camera.position);
-    
-    updateMovement(delta);
     try {
+        const delta = clock.getDelta();
+        const time = clock.getElapsedTime();
+        
+        updateMovement(delta);
         updateLightArmatures(time);
-    } catch (error) {
-        console.error('Error in light animation:', error);
-    }
-    // Update controls if defined
-    if (controls && typeof controls.update === 'function') {
-        controls.update();
-    }
-    
-    try {
+        
+        if (controls && typeof controls.update === 'function') {
+            controls.update();
+        }
+        
         renderer.render(scene, camera);
     } catch (error) {
-        console.error('Render error:', error);
+        console.error('Animation error:', error);
+        // Don't repeatedly show errors
+        if (renderer && renderer.setAnimationLoop) {
+            renderer.setAnimationLoop(null);
+            document.getElementById('error').textContent = 'Rendering error. Please refresh the page.';
+            document.getElementById('error').style.display = 'block';
+        }
     }
 }
 
@@ -878,58 +884,24 @@ function updateMovement(delta) {
     if (camera.position.z > 9.5) camera.position.z = 9.5;
 }
 
-// Completely rewritten and simplified update function
+// Simplified update function
 function updateLightArmatures(time) {
-    // Safely exit if no armatures
     if (!lightArmatures || lightArmatures.length === 0) {
         return;
     }
     
-    // Update each fixture
     for (let i = 0; i < lightArmatures.length; i++) {
         const fixture = lightArmatures[i];
         
-        // Check for required properties
         if (!fixture || !fixture.head) continue;
         
-        // Calculate rotation amounts
-        const speed = 0.3 + (i % 5) * 0.05;
-        const phaseX = i * 0.5;
-        const phaseZ = i * 0.7;
+        // Simpler movement pattern
+        fixture.head.rotation.x = Math.sin(time * 0.3) * 0.5 - 0.2;
+        fixture.head.rotation.z = Math.cos(time * 0.2) * 0.3;
         
-        // Rotate the head - slower, more natural movement
-        fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2; // Angle slightly downward
-        fixture.head.rotation.z = Math.sin(time * speed * 0.7 + phaseZ) * 0.5;
-        
-        // Update beam opacity with slight pulsing
+        // Update beam opacity
         if (fixture.beam && fixture.beam.material) {
-            const pulseIntensity = 0.15 + Math.sin(time * 2 + i) * 0.05;
-            fixture.beam.material.opacity = pulseIntensity;
-        }
-        
-        // Update lens intensity - check if lens and material exist
-        if (fixture.lens && fixture.lens.material && fixture.lens.material.emissiveIntensity !== undefined) {
-            fixture.lens.material.emissiveIntensity = 1 + Math.sin(time * 3 + i) * 0.3;
-        }
-        
-        // Animate particles in the beam
-        if (fixture.particles) {
-            fixture.particles.children.forEach(particle => {
-                if (particle.userData) {
-                    // Move particles upward in the beam
-                    particle.position.y += particle.userData.speed;
-                    
-                    // Reset particles that reach the top
-                    if (particle.position.y > 0) {
-                        particle.position.y = particle.userData.yStart;
-                    }
-                    
-                    // Add slight radial movement
-                    particle.userData.theta += 0.01;
-                    particle.position.x = Math.sin(particle.userData.theta) * particle.userData.radius;
-                    particle.position.z = Math.cos(particle.userData.theta) * particle.userData.radius;
-                }
-            });
+            fixture.beam.material.opacity = 0.1 + Math.sin(time) * 0.05;
         }
     }
 }
