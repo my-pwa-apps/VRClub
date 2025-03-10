@@ -11,78 +11,38 @@ let lightArmatures = [];
 
 async function init() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111); // Add background color for debug
+    scene.background = new THREE.Color(0x000000);
     
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 2, 10); // Move camera back and up
-    camera.lookAt(0, 0, 0);
+    camera.position.set(0, 1.6, 5);
     
     renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById('club-scene'),
-        antialias: true
+        antialias: true,
+        powerPreference: "high-performance"
     });
+    
+    // Optimize renderer
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    renderer.xr.setReferenceSpaceType('local-floor');
-    
-    // Add VR button
-    document.getElementById('vr-button').appendChild(VRButton.createButton(renderer));
-    
-    // Add controls for non-VR viewing
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2;
-    
-    // Make renderer look better
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
-    renderer.physicallyCorrectLights = true;
-    
-    // Add strong basic lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0); // Doubled intensity
-    scene.add(ambientLight);
-    
-    // Add multiple point lights for better visibility
-    const lights = [
-        { pos: [0, 8, 0], color: 0xffffff, intensity: 1.5 },
-        { pos: [-5, 5, 5], color: 0xffffff, intensity: 1.0 },
-        { pos: [5, 5, 5], color: 0xffffff, intensity: 1.0 }
-    ];
-    
-    lights.forEach(light => {
-        const pointLight = new THREE.PointLight(light.color, light.intensity);
-        pointLight.position.set(...light.pos);
-        scene.add(pointLight);
-    });
+    renderer.toneMappingExposure = 1.5;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Debug helper - add axes for orientation
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
-    
-    // Add keyboard controls
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
-    
+    // Basic lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
+
     try {
-        console.log('Starting club environment creation...');
         await createClubEnvironment();
-        console.log('Club environment created successfully');
+        setupEventListeners();
+        renderer.setAnimationLoop(animate);
     } catch (error) {
-        console.error('Error creating club environment:', error);
+        console.error('Club initialization failed:', error);
+        document.getElementById('loading').textContent = 'Failed to load club environment';
     }
-    
-    // Start render loop
-    renderer.setAnimationLoop(() => {
-        try {
-            animate();
-        } catch (error) {
-            console.error('Animation error:', error);
-        }
-    });
 }
 
 function onKeyDown(event) {
@@ -128,42 +88,57 @@ function onKeyUp(event) {
 }
 
 async function createClubEnvironment() {
-    // Load textures first
     const textureLoader = new THREE.TextureLoader();
-    const [woodTexture, woodNormal, stoneTexture, stoneNormal] = await Promise.all([
-        textureLoader.loadAsync('https://threejs.org/examples/textures/hardwood2_diffuse.jpg'),
-        textureLoader.loadAsync('https://threejs.org/examples/textures/hardwood2_normal.jpg'),
-        textureLoader.loadAsync('https://threejs.org/examples/textures/brick_diffuse.jpg'),
-        textureLoader.loadAsync('https://threejs.org/examples/textures/brick_bump.jpg')
+    const loadTexture = async (url) => {
+        try {
+            const texture = await textureLoader.loadAsync(url);
+            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(4, 4);
+            return texture;
+        } catch (error) {
+            console.warn(`Failed to load texture: ${url}`);
+            return null;
+        }
+    };
+
+    // Load all textures concurrently
+    const [woodDiffuse, woodNormal, stoneDiffuse, stoneNormal] = await Promise.all([
+        loadTexture('https://threejs.org/examples/textures/hardwood2_diffuse.jpg'),
+        loadTexture('https://threejs.org/examples/textures/hardwood2_normal.jpg'),
+        loadTexture('https://threejs.org/examples/textures/brick_diffuse.jpg'),
+        loadTexture('https://threejs.org/examples/textures/brick_bump.jpg')
     ]);
 
-    // Configure textures
-    [woodTexture, woodNormal, stoneTexture, stoneNormal].forEach(texture => {
-        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(4, 4);
-    });
+    // Create optimized materials
+    const materials = {
+        floor: new THREE.MeshStandardMaterial({
+            map: woodDiffuse,
+            normalMap: woodNormal,
+            color: 0xaaaaaa,
+            metalness: 0.2,
+            roughness: 0.8
+        }),
+        wall: new THREE.MeshStandardMaterial({
+            map: stoneDiffuse,
+            normalMap: stoneNormal,
+            color: 0xcccccc,
+            metalness: 0.0,
+            roughness: 1.0
+        })
+    };
 
-    // Create materials with loaded textures
-    const floorMaterial = new THREE.MeshStandardMaterial({
-        map: woodTexture,
-        normalMap: woodNormal,
-        color: 0xaaaaaa,
-        metalness: 0.2,
-        roughness: 0.8
-    });
+    // Create environment
+    createBasicStructure(materials);
+    createLightingArmatures();
+    createDJBooth();
+    createBar();
+}
 
-    const wallMaterial = new THREE.MeshStandardMaterial({
-        map: stoneTexture,
-        normalMap: stoneNormal,
-        color: 0xcccccc,
-        metalness: 0.0,
-        roughness: 1.0
-    });
-
-    // Floor with fallback material
+function createBasicStructure(materials) {
+    // Floor
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(20, 20),
-        floorMaterial
+        materials.floor
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -185,17 +160,15 @@ async function createClubEnvironment() {
 
     // Walls
     const walls = [
-        { size: [20, 10, 0.3], position: [0, 5, -10] },  // Back
-        { size: [0.3, 10, 20], position: [-10, 5, 0] },  // Left
-        { size: [0.3, 10, 20], position: [10, 5, 0] }    // Right
+        { size: [20, 10, 0.3], pos: [0, 5, -10] },
+        { size: [0.3, 10, 20], pos: [-10, 5, 0] },
+        { size: [0.3, 10, 20], pos: [10, 5, 0] }
     ];
 
-    walls.forEach(wall => {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(...wall.size),
-            wallMaterial
-        );
-        mesh.position.set(...wall.position);
+    const wallGeometries = walls.map(w => new THREE.BoxGeometry(...w.size));
+    walls.forEach((wall, i) => {
+        const mesh = new THREE.Mesh(wallGeometries[i], materials.wall);
+        mesh.position.set(...wall.pos);
         mesh.receiveShadow = true;
         scene.add(mesh);
     });
@@ -207,13 +180,6 @@ async function createClubEnvironment() {
     );
     ceiling.position.set(0, 10, 0);
     scene.add(ceiling);
-
-    // Add lighting armatures
-    createLightingArmatures();
-    
-    // Create detailed areas
-    createDJBooth();
-    createBar();
 }
 
 function createLightingArmatures() {
@@ -606,27 +572,22 @@ function updateMovement(delta) {
 }
 
 function updateLightArmatures(time) {
-    // Calculate synchronized movement
     const angle = time * 0.5;
     const rotationX = Math.sin(angle) * 0.5;
     const rotationZ = Math.cos(angle) * 0.5;
-    
-    // Calculate color based on time
-    const hue = (Math.sin(time * 0.2) + 1) / 2;
-    const color = new THREE.Color().setHSL(hue, 1, 0.5);
+    const color = new THREE.Color().setHSL((Math.sin(time * 0.2) + 1) / 2, 1, 0.5);
     
     lightArmatures.forEach(armature => {
-        // Update head rotation
         armature.head.rotation.x = rotationX;
         armature.head.rotation.z = rotationZ;
         
-        // Update colors
-        armature.lens.material.color.copy(color);
-        armature.lens.material.emissive.copy(color);
-        armature.spotlight.color.copy(color);
-        armature.beam.material.color.copy(color);
+        // Update all colors at once
+        const newColor = color.clone();
+        armature.lens.material.color.copy(newColor);
+        armature.lens.material.emissive.copy(newColor);
+        armature.spotlight.color.copy(newColor);
+        armature.beam.material.color.copy(newColor);
         
-        // Update spotlight and beam intensity
         const intensity = 1 + Math.sin(time * 2) * 0.3;
         armature.spotlight.intensity = intensity * 15;
         armature.beam.material.opacity = intensity * 0.1;
