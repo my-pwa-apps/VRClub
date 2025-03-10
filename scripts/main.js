@@ -456,54 +456,58 @@ function createLightBeam(position, color) {
     const fixture = createLightFixture(position, color);
     beamGroup.add(fixture);
     
+    // Calculate the full height from ceiling to floor
+    const height = position.y;
+    
     // Add spotlight
     const spotlight = new THREE.SpotLight(color, 2);
-    spotlight.position.copy(position);
+    spotlight.position.set(0, 0, 0); // Position relative to group
     spotlight.angle = Math.PI / 12;
     spotlight.penumbra = 0.3;
     spotlight.decay = 1;
-    spotlight.distance = position.y * 2;
+    spotlight.distance = height + 2; // Ensure it reaches past the floor
     
-    // Create full-length beam geometry
-    const height = position.y;
+    // Create beam geometry that reaches exactly to floor
     const coreGeometry = new THREE.CylinderGeometry(0.05, 0.4, height, 16, 8, true);
     const coreMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
-        opacity: 0.1,
+        opacity: 0.15,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     
-    // Move pivot point to top
+    // Adjust pivot point and position
     coreGeometry.translate(0, -height/2, 0);
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     
-    // Create volumetric light cone
-    const volumetricGeometry = new THREE.CylinderGeometry(0.1, 0.8, height, 16, 8, true);
+    // Create volumetric light effect
+    const volumetricGeometry = new THREE.CylinderGeometry(0.1, 0.6, height, 16, 8, true);
     volumetricGeometry.translate(0, -height/2, 0);
     
     const volumetricMaterial = new THREE.ShaderMaterial({
         uniforms: {
             color: { value: new THREE.Color(color) },
-            viewVector: { value: camera.position },
-            beamHeight: { value: height }
+            viewVector: { value: camera.position }
         },
         vertexShader: `
             varying vec3 vPosition;
+            varying vec2 vUv;
             void main() {
                 vPosition = position;
+                vUv = uv;
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
         fragmentShader: `
             uniform vec3 color;
-            uniform float beamHeight;
             varying vec3 vPosition;
+            varying vec2 vUv;
             void main() {
-                float intensity = smoothstep(beamHeight, 0.0, abs(vPosition.y));
-                gl_FragColor = vec4(color, intensity * 0.2);
+                float falloff = 1.0 - (vUv.y);
+                float intensity = pow(falloff, 1.5) * 0.2;
+                gl_FragColor = vec4(color, intensity);
             }
         `,
         transparent: true,
@@ -514,9 +518,9 @@ function createLightBeam(position, color) {
     
     const volumetricBeam = new THREE.Mesh(volumetricGeometry, volumetricMaterial);
     
-    // Add floor spot
+    // Add floor spot that follows the beam
     const floorSpot = new THREE.Mesh(
-        new THREE.CircleGeometry(0.8, 16),
+        new THREE.CircleGeometry(0.6, 16),
         new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
@@ -534,6 +538,7 @@ function createLightBeam(position, color) {
     beamGroup.add(spotlight.target);
     beamGroup.add(floorSpot);
     
+    // Position the entire group
     beamGroup.position.copy(position);
     
     return {
@@ -542,7 +547,8 @@ function createLightBeam(position, color) {
         spotlight: spotlight,
         core: core,
         volumetric: volumetricBeam,
-        floorSpot: floorSpot
+        floorSpot: floorSpot,
+        height: height
     };
 }
 
@@ -731,28 +737,25 @@ function updateLightingEffects(delta) {
         if (lightObj.group) {
             const angle = time * lightObj.speed;
             
-            // Keep fixture stationary, only rotate beam
-            const targetX = lightObj.initialPos.x + Math.sin(angle) * lightObj.movementRadius;
-            const targetZ = lightObj.initialPos.z + Math.cos(angle) * lightObj.movementRadius;
+            // Calculate target position on floor
+            const targetX = Math.sin(angle) * lightObj.movementRadius;
+            const targetZ = Math.cos(angle) * lightObj.movementRadius;
             
-            const floorTarget = new THREE.Vector3(targetX, 0, targetZ);
+            // Update spotlight target
+            lightObj.spotlight.target.position.set(targetX, -lightObj.height, targetZ);
             
-            // Update spotlight and its target
-            lightObj.spotlight.target.position.copy(floorTarget);
-            
-            // Calculate direction for beam rotation
-            const direction = floorTarget.clone().sub(lightObj.group.position).normalize();
-            lightObj.group.lookAt(floorTarget);
+            // Rotate beam group to point at target
+            const targetVector = new THREE.Vector3(targetX, -lightObj.height, targetZ);
+            lightObj.group.lookAt(targetVector.add(lightObj.group.position));
             
             // Update floor spot position
-            lightObj.floorSpot.position.x = targetX - lightObj.initialPos.x;
-            lightObj.floorSpot.position.z = targetZ - lightObj.initialPos.z;
+            lightObj.floorSpot.position.x = targetX;
+            lightObj.floorSpot.position.z = targetZ;
             
             // Pulse intensity
             const pulseIntensity = 1.5 + Math.sin(time * 2) * 0.5;
             lightObj.spotlight.intensity = pulseIntensity;
-            lightObj.core.material.opacity = 0.1 * pulseIntensity;
-            lightObj.volumetric.material.uniforms.viewVector.value.copy(camera.position);
+            lightObj.core.material.opacity = 0.15 * pulseIntensity;
         }
     });
 
