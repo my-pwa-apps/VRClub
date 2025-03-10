@@ -799,84 +799,237 @@ function createDancers() {
     console.log(`Created ${dancers.length} dancers`);
 }
 
-// Create a simple humanoid figure
+// Create a simple humanoid figure with gender characteristics and facial expressions
 function createDancerFigure() {
     const dancer = new THREE.Group();
     
-    // Random color for dancer
-    const hue = Math.random();
-    const color = new THREE.Color().setHSL(hue, 0.8, 0.5);
+    // Determine gender randomly
+    const isFemale = Math.random() > 0.5;
+    
+    // Random color for clothing with gender-typical variations
+    const hue = isFemale 
+        ? 0.7 + Math.random() * 0.5 // More purple/pink hues for female
+        : Math.random() * 0.7; // More red/green/blue hues for male
+    const saturation = 0.6 + Math.random() * 0.4;
+    const color = new THREE.Color().setHSL(hue, saturation, 0.5);
     
     // Create materials with slight emission for visibility in dark club
     const bodyMaterial = new THREE.MeshStandardMaterial({
         color: color,
-        emissive: color.clone().multiplyScalar(0.2),
+        emissive: color.clone().multiplyScalar(0.3),
         roughness: 0.8,
         metalness: 0.2
     });
     
-    // Create head
+    // Skin color variations
+    const skinHue = 0.05 + Math.random() * 0.1; // Various skin tones
+    const skinSaturation = 0.3 + Math.random() * 0.4;
+    const skinLightness = 0.4 + Math.random() * 0.4;
+    const skinColor = new THREE.Color().setHSL(skinHue, skinSaturation, skinLightness);
+    
+    const skinMaterial = new THREE.MeshStandardMaterial({
+        color: skinColor,
+        emissive: skinColor.clone().multiplyScalar(0.2),
+        roughness: 0.6,
+        metalness: 0.1
+    });
+    
+    // Create head with facial features
+    const headGroup = new THREE.Group();
+    
+    // Base head
     const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 8, 8),
-        bodyMaterial
+        new THREE.SphereGeometry(0.12, 12, 12),
+        skinMaterial
     );
-    head.position.y = 1.6;
+    headGroup.add(head);
     
-    // Create torso
-    const torso = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.1, 0.6, 8),
+    // Add eyes
+    const eyeGeometry = new THREE.SphereGeometry(0.02, 8, 8);
+    const eyeWhiteMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const eyePupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    
+    // Left eye
+    const leftEyeWhite = new THREE.Mesh(eyeGeometry, eyeWhiteMaterial);
+    leftEyeWhite.position.set(0.05, 0.02, 0.1);
+    headGroup.add(leftEyeWhite);
+    
+    const leftEyePupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.01, 6, 6),
+        eyePupilMaterial
+    );
+    leftEyePupil.position.set(0.055, 0.02, 0.115);
+    headGroup.add(leftEyePupil);
+    
+    // Right eye
+    const rightEyeWhite = new THREE.Mesh(eyeGeometry, eyeWhiteMaterial);
+    rightEyeWhite.position.set(-0.05, 0.02, 0.1);
+    headGroup.add(rightEyeWhite);
+    
+    const rightEyePupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.01, 6, 6),
+        eyePupilMaterial
+    );
+    rightEyePupil.position.set(-0.055, 0.02, 0.115);
+    headGroup.add(rightEyePupil);
+    
+    // Add mouth - Create a simple smile
+    const mouthGeometry = new THREE.TorusGeometry(0.04, 0.01, 8, 12, Math.PI);
+    const mouthMaterial = new THREE.MeshBasicMaterial({ color: 0x990000 });
+    const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+    mouth.position.set(0, -0.04, 0.1);
+    mouth.rotation.x = -Math.PI / 2;
+    mouth.rotation.z = Math.PI;
+    headGroup.add(mouth);
+    
+    // Add hair based on gender
+    if (isFemale) {
+        // Female longer hair
+        const hairColor = new THREE.Color().setHSL(
+            Math.random() * 0.1 + (Math.random() > 0.3 ? 0 : 0.3), // Blonde or dark
+            0.5 + Math.random() * 0.5,
+            0.2 + Math.random() * 0.4
+        );
+        
+        const hairMaterial = new THREE.MeshStandardMaterial({
+            color: hairColor,
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        
+        // Create longer hair with multiple segments
+        const hairGroup = new THREE.Group();
+        
+        // Hair top
+        const hairTop = new THREE.Mesh(
+            new THREE.SphereGeometry(0.13, 12, 12, 0, Math.PI * 2, 0, Math.PI/2),
+            hairMaterial
+        );
+        hairTop.position.y = 0.02;
+        hairGroup.add(hairTop);
+        
+        // Hair back
+        const hairBack = new THREE.Mesh(
+            new THREE.BoxGeometry(0.18, 0.2, 0.1),
+            hairMaterial
+        );
+        hairBack.position.set(0, -0.08, -0.08);
+        hairGroup.add(hairBack);
+        
+        headGroup.add(hairGroup);
+    } else {
+        // Male shorter hair
+        const hairColor = new THREE.Color().setHSL(
+            Math.random() * 0.1,
+            0.3 + Math.random() * 0.4,
+            0.1 + Math.random() * 0.3
+        );
+        
+        const hairMaterial = new THREE.MeshStandardMaterial({
+            color: hairColor,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        
+        // Create short hair
+        const hairTop = new THREE.Mesh(
+            new THREE.SphereGeometry(0.125, 12, 12, 0, Math.PI * 2, 0, Math.PI/2),
+            hairMaterial
+        );
+        hairTop.position.y = 0.02;
+        headGroup.add(hairTop);
+    }
+    
+    // Position complete head
+    headGroup.position.y = 1.6;
+    dancer.add(headGroup);
+    
+    // Create torso with gender-specific proportions
+    const torsoWidth = isFemale ? 0.13 : 0.15;
+    const torsoHeight = 0.6;
+    
+    const torso = new THREE.Group();
+    
+    // Main torso
+    const torsoMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(torsoWidth, torsoWidth * 1.1, torsoHeight, 12),
         bodyMaterial
     );
+    torso.add(torsoMesh);
+    
+    // For females, add a subtle bust shape
+    if (isFemale) {
+        const bustGeometry = new THREE.SphereGeometry(torsoWidth * 1.1, 8, 8, 0, Math.PI * 2, 0, Math.PI/2);
+        const bust = new THREE.Mesh(bustGeometry, bodyMaterial);
+        bust.rotation.x = Math.PI;
+        bust.position.y = torsoHeight * 0.2;
+        bust.position.z = torsoWidth * 0.2;
+        torso.add(bust);
+    }
+    
     torso.position.y = 1.25;
-    
-    // Create limbs
-    const limbMaterial = bodyMaterial.clone();
+    dancer.add(torso);
     
     // Create arms
-    const leftArm = createLimb(limbMaterial, 0.05, 0.5);
-    leftArm.position.set(0.2, 1.4, 0);
+    const armMaterial = skinMaterial;
+    
+    // Create arms - thinner for females
+    const armRadius = isFemale ? 0.04 : 0.05;
+    const leftArm = createLimb(armMaterial, armRadius, 0.5);
+    leftArm.position.set(torsoWidth * 1.1, 1.4, 0);
     leftArm.rotation.z = -Math.PI / 4;
     
-    const rightArm = createLimb(limbMaterial, 0.05, 0.5);
-    rightArm.position.set(-0.2, 1.4, 0);
+    const rightArm = createLimb(armMaterial, armRadius, 0.5);
+    rightArm.position.set(-torsoWidth * 1.1, 1.4, 0);
     rightArm.rotation.z = Math.PI / 4;
     
-    // Create legs
-    const leftLeg = createLimb(limbMaterial, 0.07, 0.8);
-    leftLeg.position.set(0.1, 0.9, 0);
-    
-    const rightLeg = createLimb(limbMaterial, 0.07, 0.8);
-    rightLeg.position.set(-0.1, 0.9, 0);
-    
-    // Add all parts to dancer
-    dancer.add(head);
-    dancer.add(torso);
     dancer.add(leftArm);
     dancer.add(rightArm);
+    
+    // Create legs with gender differences - females have longer thinner legs
+    const legRadius = isFemale ? 0.06 : 0.07;
+    const legLength = isFemale ? 0.85 : 0.8;
+    const legSpacing = isFemale ? 0.08 : 0.1;
+    
+    const leftLeg = createLimb(bodyMaterial, legRadius, legLength); // Use clothing material for legs
+    leftLeg.position.set(legSpacing, 0.9, 0);
+    
+    const rightLeg = createLimb(bodyMaterial, legRadius, legLength);
+    rightLeg.position.set(-legSpacing, 0.9, 0);
+    
     dancer.add(leftLeg);
     dancer.add(rightLeg);
+    
+    // Store gender in userData for animation purposes
+    dancer.userData.isFemale = isFemale;
+    
+    // Add facial expression state
+    dancer.userData.expressionState = {
+        smiling: Math.random() > 0.3, // Most are smiling
+        blinkTime: Math.random() * 3,
+        lastBlink: 0
+    };
+    
+    // Reference facial features for animation
+    dancer.userData.face = {
+        leftEye: leftEyeWhite,
+        rightEye: rightEyeWhite,
+        leftPupil: leftEyePupil,
+        rightPupil: rightEyePupil,
+        mouth: mouth
+    };
     
     return dancer;
 }
 
-// Helper function to create limbs
-function createLimb(material, radius, height) {
-    const limb = new THREE.Mesh(
-        new THREE.CylinderGeometry(radius, radius, height, 8),
-        material
-    );
-    limb.position.y = -height/2;
-    
-    return limb;
-}
-
-// Animate dancers
+// Animate dancers with facial expressions
 function updateDancers(time) {
     dancers.forEach((dancer) => {
         if (!dancer.userData) return;
         
-        const { danceType, danceSpeed, dancePhase, danceHeight } = dancer.userData;
+        const { danceType, danceSpeed, dancePhase, danceHeight, isFemale } = dancer.userData;
         
+        // Dance movement
         switch (danceType) {
             case 0: // Bouncing dance
                 dancer.position.y = Math.abs(Math.sin(time * danceSpeed + dancePhase)) * danceHeight;
@@ -899,6 +1052,42 @@ function updateDancers(time) {
                         Math.sin(time * danceSpeed + dancePhase + Math.PI) * 0.3;
                 }
                 break;
+        }
+        
+        // Update facial expressions if face references exist
+        if (dancer.userData.face && dancer.userData.expressionState) {
+            const face = dancer.userData.face;
+            const state = dancer.userData.expressionState;
+            
+            // Handle eye blinking
+            if (time - state.lastBlink > state.blinkTime) {
+                // Start a blink
+                if (face.leftEye.scale.y > 0.1) {
+                    face.leftEye.scale.y *= 0.5;
+                    face.rightEye.scale.y *= 0.5;
+                } else {
+                    // End blink
+                    face.leftEye.scale.y = 1;
+                    face.rightEye.scale.y = 1;
+                    state.lastBlink = time;
+                    state.blinkTime = 2 + Math.random() * 3; // Random time until next blink
+                }
+            }
+            
+            // Update pupils to look around occasionally
+            if (Math.sin(time * 0.5) > 0.9) {
+                face.leftPupil.position.x = 0.055 + Math.sin(time) * 0.005;
+                face.leftPupil.position.y = 0.02 + Math.cos(time * 0.7) * 0.005;
+                face.rightPupil.position.x = -0.055 + Math.sin(time) * 0.005;
+                face.rightPupil.position.y = 0.02 + Math.cos(time * 0.7) * 0.005;
+            }
+            
+            // Update mouth expression based on the beat
+            if (state.smiling) {
+                // Make smile wider/narrower with the beat
+                face.mouth.scale.x = 1 + Math.sin(time * danceSpeed) * 0.1;
+                face.mouth.scale.z = 1 + Math.cos(time * danceSpeed * 0.7) * 0.1;
+            }
         }
     });
 }
