@@ -11,7 +11,11 @@ let lightArmatures = [];
 
 async function init() {
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111); // Add background color for debug
+    
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 2, 10); // Move camera back and up
+    camera.lookAt(0, 0, 0);
     
     renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById('club-scene'),
@@ -38,32 +42,47 @@ async function init() {
     renderer.toneMappingExposure = 1;
     renderer.physicallyCorrectLights = true;
     
-    // Add much stronger ambient light for basic visibility
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Increased intensity
+    // Add strong basic lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 2.0); // Doubled intensity
     scene.add(ambientLight);
     
-    // Add directional light for better depth perception
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0); // Increased intensity
-    mainLight.position.set(5, 10, 5);
-    scene.add(mainLight);
+    // Add multiple point lights for better visibility
+    const lights = [
+        { pos: [0, 8, 0], color: 0xffffff, intensity: 1.5 },
+        { pos: [-5, 5, 5], color: 0xffffff, intensity: 1.0 },
+        { pos: [5, 5, 5], color: 0xffffff, intensity: 1.0 }
+    ];
     
-    camera.position.set(0, 1.6, 5);
+    lights.forEach(light => {
+        const pointLight = new THREE.PointLight(light.color, light.intensity);
+        pointLight.position.set(...light.pos);
+        scene.add(pointLight);
+    });
+
+    // Debug helper - add axes for orientation
+    const axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
     
     // Add keyboard controls
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
     
     try {
+        console.log('Starting club environment creation...');
         await createClubEnvironment();
-        setupEventListeners();
-        
-        // Log successful initialization
         console.log('Club environment created successfully');
     } catch (error) {
-        console.error('Error initializing club:', error);
+        console.error('Error creating club environment:', error);
     }
     
-    renderer.setAnimationLoop(animate);
+    // Start render loop
+    renderer.setAnimationLoop(() => {
+        try {
+            animate();
+        } catch (error) {
+            console.error('Animation error:', error);
+        }
+    });
 }
 
 function onKeyDown(event) {
@@ -198,6 +217,7 @@ async function createClubEnvironment() {
 }
 
 function createLightingArmatures() {
+    console.log('Creating lighting armatures...');
     const trussMaterial = new THREE.MeshStandardMaterial({
         color: 0x333333,
         metalness: 0.8,
@@ -546,15 +566,18 @@ function animate() {
     const delta = clock.getDelta();
     const time = clock.getElapsedTime();
     
-    // Update movement based on keyboard controls
+    // Update for debug
+    console.log('Camera position:', camera.position);
+    
     updateMovement(delta);
-    
-    // Update light armatures
     updateLightArmatures(time);
-    
-    // Update controls and render scene
     controls.update();
-    renderer.render(scene, camera);
+    
+    try {
+        renderer.render(scene, camera);
+    } catch (error) {
+        console.error('Render error:', error);
+    }
 }
 
 function updateMovement(delta) {
