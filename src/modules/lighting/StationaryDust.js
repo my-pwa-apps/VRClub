@@ -40,6 +40,16 @@ export class StationaryDust {
         );
     }
 
+    update(time) {
+        // Update particle positions and illumination
+        this.particles.children.forEach(particle => {
+            if (particle.userData.driftVelocity) {
+                particle.position.add(particle.userData.driftVelocity);
+                this.checkBounds(particle);
+            }
+        });
+    }
+
     checkBounds(particle) {
         const bounds = {
             x: [-9, 9],
@@ -47,11 +57,11 @@ export class StationaryDust {
             z: [-9, 9]
         };
         
-        ['x', 'y', 'z'].forEach(axis => {
+        for (const axis of ['x', 'y', 'z']) {
             if (particle.position[axis] < bounds[axis][0] || 
                 particle.position[axis] > bounds[axis][1]) {
                 particle.userData.driftVelocity[axis] *= -1;
             }
-        });
+        }
     }
 }

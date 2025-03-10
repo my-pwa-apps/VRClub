@@ -17,7 +17,7 @@ export class MirrorBall {
             envMapIntensity: 2.0
         });
         
-        this.ball = new THREE.Mesh(ballGeometry.clone(), ballMaterial.clone());
+        this.ball = new THREE.Mesh(ballGeometry, ballMaterial);
         this.createFacets();
         this.group.add(this.ball);
         this.group.position.set(0, 6, 0);
@@ -41,7 +41,7 @@ export class MirrorBall {
             facet.position.setFromSphericalCoords(0.5, phi, theta);
             facet.lookAt(0, 0, 0);
             
-            this.group.add(facet);
+            this.ball.add(facet);
         }
     }
 
@@ -60,9 +60,10 @@ export class MirrorBall {
         for (let i = 0; i < count; i++) {
             const spot = new THREE.Mesh(spotGeometry, spotMaterial);
             spot.visible = false;
+            // Store spots separately, not in scene graph yet
             this.reflectionSpots.push({
                 mesh: spot,
-                facetIndex: Math.floor(Math.random() * this.group.children.length)
+                facetIndex: Math.floor(Math.random() * 200)
             });
         }
     }
@@ -76,9 +77,17 @@ export class MirrorBall {
         this.reflectionSpots.forEach((spot, i) => {
             if (spot.mesh) {
                 const angle = time + i * 0.1;
+                if (!spot.mesh.parent) {
+                    // Only add to scene once
+                    this.group.parent?.add(spot.mesh);
+                }
+                
+                // Basic reflection animation
                 spot.mesh.position.x = Math.sin(angle) * 5;
+                spot.mesh.position.y = 0.1;
                 spot.mesh.position.z = Math.cos(angle) * 5;
                 spot.mesh.material.opacity = 0.3 + Math.sin(time * 2 + i) * 0.2;
+                spot.mesh.visible = true;
             }
         });
     }

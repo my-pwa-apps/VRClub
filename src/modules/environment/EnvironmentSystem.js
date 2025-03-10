@@ -22,7 +22,10 @@ export class EnvironmentSystem {
 
     update(time) {
         for (const element of this.elements.values()) {
-            element.update(time);
+            // Only call update if the element has an update method
+            if (element.update && typeof element.update === 'function') {
+                element.update(time);
+            }
         }
     }
 }

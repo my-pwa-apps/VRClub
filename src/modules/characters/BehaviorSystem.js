@@ -1,4 +1,33 @@
 export class BehaviorSystem {
+    constructor() {
+        this.states = {
+            dancing: {
+                duration: { min: 30, max: 120 },
+                transitions: ['socializing', 'drinking']
+            },
+            socializing: {
+                duration: { min: 20, max: 60 },
+                transitions: ['dancing', 'drinking']
+            },
+            drinking: {
+                duration: { min: 5, max: 15 },
+                transitions: ['dancing', 'socializing']
+            }
+        };
+    }
+
+    update(npc, deltaTime) {
+        npc.behavior.timeInState += deltaTime;
+
+        // Check for state transitions
+        if (npc.behavior.timeInState >= npc.behavior.nextStateChange) {
+            this.transitionState(npc);
+        }
+
+        // Update current behavior
+        this.updateBehavior(npc, deltaTime);
+    }
+
     transitionState(npc) {
         const currentState = this.states[npc.behavior.currentState];
         const nextState = currentState.transitions[
@@ -31,25 +60,25 @@ export class BehaviorSystem {
         // Apply dancing animation weight
         if (npc.mixer && npc.actions.dancing) {
             npc.actions.dancing.weight = 1.0;
-            npc.actions.socializing.weight = 0.0;
-            npc.actions.idle.weight = 0.2;
+            if (npc.actions.socializing) npc.actions.socializing.weight = 0.0;
+            if (npc.actions.idle) npc.actions.idle.weight = 0.2;
         }
     }
 
     updateSocializing(npc, deltaTime) {
         // Apply socializing animation weight
         if (npc.mixer && npc.actions.socializing) {
-            npc.actions.dancing.weight = 0.0;
+            if (npc.actions.dancing) npc.actions.dancing.weight = 0.0;
             npc.actions.socializing.weight = 1.0;
-            npc.actions.idle.weight = 0.3;
+            if (npc.actions.idle) npc.actions.idle.weight = 0.3;
         }
     }
 
     updateDrinking(npc, deltaTime) {
         // Apply drinking animation blend
         if (npc.mixer && npc.actions.idle) {
-            npc.actions.dancing.weight = 0.0;
-            npc.actions.socializing.weight = 0.3;
+            if (npc.actions.dancing) npc.actions.dancing.weight = 0.0;
+            if (npc.actions.socializing) npc.actions.socializing.weight = 0.3;
             npc.actions.idle.weight = 1.0;
         }
     }
