@@ -1904,17 +1904,6 @@ function animate() {
     }
 }
 
-// Add function to update mirror ball rotation
-function updateMirrorBall(delta) {
-    scene.traverse(object => {
-        // Find the mirror ball by checking userData
-        if (object.userData && object.userData.rotationSpeed !== undefined) {
-            // Rotate slowly around Y axis
-            object.rotation.y += object.userData.rotationSpeed * delta;
-        }
-    });
-}
-
 // Add the updateMovement function if it was accidentally removed
 function updateMovement(delta) {
     // Calculate movement direction vector
