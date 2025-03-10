@@ -40,9 +40,13 @@ async function init() {
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2;
 
-    // Create darker ambient lighting
-    const ambient = new THREE.AmbientLight(0x111111, 0.2);
+    // Increase ambient light for better visibility
+    const ambient = new THREE.AmbientLight(0x333333, 0.5); // Brighter ambient light
     scene.add(ambient);
+    
+    // Add fill light to illuminate the environment
+    const fillLight = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5);
+    scene.add(fillLight);
 
     try {
         await createClubEnvironment();
@@ -101,21 +105,23 @@ function onKeyUp(event) {
 }
 
 async function createClubEnvironment() {
-    // Create basic materials first (fallbacks)
+    // Create materials with emissive properties for visibility in the dark
     const materials = {
         floor: new THREE.MeshStandardMaterial({
             color: 0x555555,
+            emissive: 0x111111, // Slight glow
             metalness: 0.2,
             roughness: 0.8
         }),
         wall: new THREE.MeshStandardMaterial({
             color: 0x888888,
+            emissive: 0x222222, // Slight glow
             metalness: 0.0,
             roughness: 1.0
         })
     };
 
-    // Create basic structure with fallback materials
+    // Create basic structure with improved materials
     createBasicStructure(materials);
     createDJBooth();
     createBar();
@@ -144,6 +150,11 @@ async function createClubEnvironment() {
     } catch (error) {
         console.warn('Could not load wood texture, using fallback:', error);
     }
+
+    // Add directional fill light to illuminate the space
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    dirLight.position.set(0, 8, 2);
+    scene.add(dirLight);
 }
 
 function createBasicStructure(materials) {
@@ -156,11 +167,12 @@ function createBasicStructure(materials) {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Dance floor with distinct material
+    // Dance floor with emissive material for better visibility
     const danceFloor = new THREE.Mesh(
         new THREE.PlaneGeometry(10, 10),
         new THREE.MeshStandardMaterial({ 
             color: 0x333333,
+            emissive: 0x111111, // Add slight glow
             metalness: 0.7,
             roughness: 0.2,
             envMapIntensity: 1.5
@@ -185,13 +197,30 @@ function createBasicStructure(materials) {
         scene.add(mesh);
     });
 
-    // Ceiling
+    // Ceiling with slight glow
     const ceiling = new THREE.Mesh(
         new THREE.BoxGeometry(20, 0.3, 20),
-        new THREE.MeshStandardMaterial({ color: 0x666666 })
+        new THREE.MeshStandardMaterial({ 
+            color: 0x666666,
+            emissive: 0x111111 // Add slight glow
+        })
     );
     ceiling.position.set(0, 10, 0);
     scene.add(ceiling);
+    
+    // Add some dim point lights around the environment
+    const pointLights = [
+        { pos: [0, 5, 0], color: 0x666666, intensity: 0.5 },
+        { pos: [5, 2, 5], color: 0x666666, intensity: 0.3 },
+        { pos: [-5, 2, 5], color: 0x666666, intensity: 0.3 },
+        { pos: [0, 2, -8], color: 0x666666, intensity: 0.5 } // DJ booth
+    ];
+    
+    pointLights.forEach(light => {
+        const pointLight = new THREE.PointLight(light.color, light.intensity);
+        pointLight.position.set(...light.pos);
+        scene.add(pointLight);
+    });
 }
 
 // Completely rewritten light armature creation function
@@ -592,9 +621,9 @@ function createDJBooth() {
     booth.add(desk);
     
     // Add CDJs and mixer
-    const cdj1 = createCDJ();
-    const cdj2 = createCDJ();
-    const mixer = createMixer();
+    const cdj1 = createCDJ(true); // true = use emissive materials
+    const cdj2 = createCDJ(true);
+    const mixer = createMixer(true);
     
     cdj1.position.set(-1.2, 0.95, -8);
     cdj2.position.set(1.2, 0.95, -8);
@@ -605,16 +634,49 @@ function createDJBooth() {
     booth.add(mixer);
     
     scene.add(booth);
+    
+    // Add extra light to illuminate the DJ booth
+    const boothLight = new THREE.SpotLight(0xffffff, 0.8);
+    boothLight.position.set(0, 5, -6);
+    boothLight.target.position.set(0, 0, -8);
+    boothLight.angle = Math.PI / 6;
+    boothLight.penumbra = 0.3;
+    scene.add(boothLight);
+    scene.add(boothLight.target);
 }
 
-function createCDJ() {
+function createCDJ(useEmissive = false) {
     const cdjGroup = new THREE.Group();
     
-    // Main body
+    // Main body with optional emissive material
+    const bodyMaterial = useEmissive ? 
+        new THREE.MeshStandardMaterial({ 
+            color: 0x111111, 
+            emissive: 0x222222,
+            metalness: 0.8 
+        }) :
+        new THREE.MeshStandardMaterial({ 
+            color: 0x111111, 
+            metalness: 0.8 
+        });
+    
     const body = new THREE.Mesh(
         new THREE.BoxGeometry(0.8, 0.1, 0.8),
-        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8 })
+        bodyMaterial
     );
+    
+    // Add display screen with glow
+    const screen = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.5, 0.3),
+        new THREE.MeshBasicMaterial({
+            color: 0x4444ff,
+            emissive: 0x4444ff,
+            emissiveIntensity: 0.5
+        })
+    );
+    screen.rotation.x = -Math.PI / 2;
+    screen.position.y = 0.051;
+    screen.position.z = -0.2;
     
     // Jog wheel
     const jogWheel = new THREE.Mesh(
@@ -625,12 +687,13 @@ function createCDJ() {
     jogWheel.position.y = 0.05;
     
     cdjGroup.add(body);
+    cdjGroup.add(screen); // Add the glowing screen
     cdjGroup.add(jogWheel);
     
     return cdjGroup;
 }
 
-function createMixer() {
+function createMixer(useEmissive = false) {
     const mixerGroup = new THREE.Group();
     
     // Main body
