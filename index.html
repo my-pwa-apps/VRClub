@@ -93,6 +93,8 @@
     <div id="club-name">CONCRETE</div>
     <canvas id="club-scene"></canvas>
     <div id="vr-button"></div>
+    <!-- Add error display div -->
+    <div id="error" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:20px; border-radius:5px;"></div>
 
     <script type="module" src="scripts/main.js"></script>
     <script>
@@ -101,6 +103,13 @@
             setTimeout(function() {
                 document.getElementById('loading').style.display = 'none';
             }, 2000);
+        });
+        // Add error handler
+        window.addEventListener('error', function(event) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = 'Error loading resources. Please refresh the page.';
+            errorDiv.style.display = 'block';
+            console.error('Resource loading error:', event.error);
         });
     </script>
 </body>
