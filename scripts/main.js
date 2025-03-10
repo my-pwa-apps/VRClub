@@ -484,7 +484,7 @@ function createClubLighting() {
     const ambientLight = new THREE.AmbientLight(0x111111);
     scene.add(ambientLight);
     
-    // Main spotlight
+    // Main spotlight for DJ booth
     const mainSpot = new THREE.SpotLight(0xffffff, 0.8);
     mainSpot.position.set(0, 9, -8);
     mainSpot.target.position.set(0, 0, -8);
@@ -494,22 +494,38 @@ function createClubLighting() {
     scene.add(mainSpot);
     scene.add(mainSpot.target);
     
-    // Colored moving spotlights
+    // Colored moving spotlights with beams
     const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xffff00];
     for (let i = 0; i < 5; i++) {
-        const position = new THREE.Vector3(-7 + i * 3.5, 9, 0);
-        const beam = createLightBeam(position, colors[i]);
+        const spotLight = new THREE.SpotLight(colors[i], 2);
+        spotLight.position.set(-7 + i * 3.5, 9, 0);
+        spotLight.angle = Math.PI / 8;
+        spotLight.penumbra = 0.2;
+        spotLight.castShadow = true;
+        
+        spotLight.target.position.set(-7 + i * 3.5, 0, 0);
+        scene.add(spotLight);
+        scene.add(spotLight.target);
+        
+        // Create enhanced light beam
+        const beam = createLightBeam(spotLight.position.clone(), colors[i]);
         scene.add(beam);
         
         lights.push({
+            light: spotLight,
             beam: beam,
-            initialPos: position.clone(),
+            initialPos: new THREE.Vector3(-7 + i * 3.5, 9, 0),
             speed: 0.5 + Math.random() * 1.5,
-            movementRadius: 2 + Math.random() * 3
+            movementRadius: 2 + Math.random() * 3,
+            color: colors[i]
         });
     }
 
-    // Create a dance floor with grid of colored lights
+    // Create dance floor lighting
+    createDanceFloorLights(colors);
+}
+
+function createDanceFloorLights(colors) {
     const danceFloorSize = 10;
     const gridSize = 10;
     const spacing = danceFloorSize / gridSize;
@@ -517,11 +533,8 @@ function createClubLighting() {
     for (let x = 0; x < gridSize; x++) {
         for (let z = 0; z < gridSize; z++) {
             if ((x + z) % 2 === 0) {
-                const pointLight = new THREE.PointLight(
-                    colors[Math.floor(Math.random() * colors.length)], 
-                    0.3,
-                    3
-                );
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const pointLight = new THREE.PointLight(color, 0.3, 3);
                 pointLight.position.set(
                     -danceFloorSize/2 + x * spacing + spacing/2,
                     0.1,
@@ -532,30 +545,11 @@ function createClubLighting() {
                     light: pointLight,
                     type: 'danceFloor',
                     initialIntensity: 0.3,
-                    originalColor: pointLight.color.getHex()
+                    color: color
                 });
             }
         }
     }
-
-    // Add visible light beams to spotlights
-    lights.forEach(lightObj => {
-        if (!lightObj.type) { // Only for moving spotlights
-            const beamGeometry = new THREE.CylinderGeometry(0, 0.5, 8, 8);
-            const beamMaterial = new THREE.MeshBasicMaterial({
-                color: lightObj.light.color,
-                transparent: true,
-                opacity: 0.1,
-                side: THREE.DoubleSide,
-                blending: THREE.AdditiveBlending
-            });
-            const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-            beam.position.copy(lightObj.light.position);
-            beam.rotation.x = Math.PI / 2;
-            scene.add(beam);
-            lightObj.beam = beam;
-        }
-    });
 }
 
 function createLasers() {
@@ -794,25 +788,21 @@ function updateLightingEffects(delta) {
     const time = clock.getElapsedTime();
     
     lights.forEach(lightObj => {
-        if (lightObj.beam) {
+        if (lightObj.beam && !lightObj.type) {
             // Update beam rotation and position based on pattern
             const angle = time * lightObj.speed;
             const x = lightObj.initialPos.x + Math.sin(angle) * lightObj.movementRadius;
             const z = lightObj.initialPos.z + Math.cos(angle) * lightObj.movementRadius;
             
-            lightObj.beam.position.x = x;
-            lightObj.beam.position.z = z;
+            // Update spotlight
+            if (lightObj.light) {
+                lightObj.light.position.set(x, lightObj.initialPos.y, z);
+                lightObj.light.target.position.set(x, 0, z);
+            }
             
-            // Make beam point slightly away from center
-            const center = new THREE.Vector3(0, 0, 0);
-            const direction = new THREE.Vector3(x, 0, z).normalize();
-            const targetPos = new THREE.Vector3(
-                x + direction.x * 5,
-                0,
-                z + direction.z * 5
-            );
-            
-            lightObj.beam.lookAt(targetPos);
+            // Update beam
+            lightObj.beam.position.set(x, lightObj.initialPos.y, z);
+            lightObj.beam.lookAt(new THREE.Vector3(x, 0, z));
         }
     });
 
