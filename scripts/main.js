@@ -610,7 +610,7 @@ function createRealisticLightFixture(position, color) {
     };
 }
 
-// Optimized function to update lights with realistic effects
+// Optimized function to update light beams with proper surface collision
 function updateLightArmatures(time) {
     if (!lightArmatures || lightArmatures.length === 0) return;
     
@@ -637,7 +637,7 @@ function updateLightArmatures(time) {
         }
     });
     
-    // Update each light with performance considerations
+    // Update each light
     for (let i = 0; i < lightArmatures.length; i++) {
         const fixture = lightArmatures[i];
         if (!fixture || !fixture.head) continue;
@@ -761,13 +761,15 @@ function updateLightArmatures(time) {
                     
                     // Calculate dot product between beam direction and surface normal
                     // for realistic light spread on angled surfaces
+                    const dotProduct = Math.abs(normal.dot(direction));
+                    
                     // Adjust spot shape based on surface angle
                     if (Math.abs(normal.y) > 0.9) {
                         // Floor/ceiling - circular spot
                         fixture.surfaceSpot.scale.set(spotSize, spotSize, 1);
                     } else {
-                        // Wall - elliptical spot - stretch factor based on angle of incidence
-                        const stretchFactor = 1 / Math.max(0.2, Math.abs(dotProduct));
+                        // Wall - elliptical spot based on angle of incidence
+                        const stretchFactor = 1 / Math.max(0.2, dotProduct);
                         fixture.surfaceSpot.scale.set(spotSize * stretchFactor, spotSize, 1);
                     }
                     
@@ -836,7 +838,7 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
                     particle.userData.originalOpacity = particle.material.opacity;
                 }
                 
-                // Mix particle color with beam color based on intensity
+                // Mix particle color with beam color based on the intensity
                 particle.material.color.copy(beamColor);
                 
                 // Higher opacity for particles closer to beam center
