@@ -82,4 +82,18 @@ export class LightingSystem {
         this.stationaryDust = new StationaryDust();
         this.scene.add(this.stationaryDust.particles);
     }
+
+    update(time) {
+        this.lights.forEach(light => {
+            if (light.update) light.update(time);
+        });
+
+        if (this.mirrorBall && this.mirrorBall.update) {
+            this.mirrorBall.update(time);
+        }
+
+        if (this.stationaryDust && this.stationaryDust.update) {
+            this.stationaryDust.update(time);
+        }
+    }
 }
