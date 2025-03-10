@@ -95,15 +95,18 @@ async function init() {
         powerPreference: "high-performance"
     });
     
-    // Optimize renderer
+    // Enhanced renderer settings for better lighting
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.5;
+    renderer.toneMappingExposure = 0.8; // Lower for more realistic dark club atmosphere
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
+    
+    // Enable physically correct lighting mode
+    renderer.physicallyCorrectLights = true;
+    
     // Set up XR features
     renderer.xr.enabled = true;
     
@@ -128,12 +131,12 @@ async function init() {
         console.log('VR session ended - controls enabled');
     });
 
-    // Make ambient light much dimmer for a darker atmosphere
-    const ambient = new THREE.AmbientLight(0x111111, 0.15); // Reduced intensity
+    // Create much dimmer ambient light for a darker atmosphere
+    const ambient = new THREE.AmbientLight(0x111111, 0.05); // Very low intensity
     scene.add(ambient);
     
-    // Reduce the hemisphere light intensity for darker environment
-    const fillLight = new THREE.HemisphereLight(0x4444ff, 0x222211, 0.1); // Much less intensity
+    // Use a subtle hemisphere light for realistic environment lighting
+    const fillLight = new THREE.HemisphereLight(0x2233ff, 0x221122, 0.05); // Blue-ish top, red-ish bottom
     scene.add(fillLight);
 
     // Check for WebGL compatibility
@@ -491,7 +494,7 @@ function createRealisticLightFixture(position, color) {
     const lensMaterial = new THREE.MeshStandardMaterial({
         color: color,
         emissive: color,
-        emissiveIntensity: 2.0,
+        emissiveIntensity: 1.5,
         transparent: true,
         opacity: 0.9
     });
@@ -513,14 +516,22 @@ function createRealisticLightFixture(position, color) {
     group.add(headGroup);
     
     // -- Create intense spotlight --
-    const spotlight = new THREE.SpotLight(color, 15);
+    const spotlight = new THREE.SpotLight(color, 20); // Higher intensity 
     spotlight.position.copy(housingGroup.position);
     spotlight.position.z -= 0.22;
     spotlight.angle = Math.PI / 12;
-    spotlight.penumbra = 0.2;
-    spotlight.decay = 1;
+    spotlight.penumbra = 0.3;
+    spotlight.decay = 2.0; // Physically correct inverse square falloff
     spotlight.distance = 40;
-    spotlight.castShadow = false;
+    
+    // Enable shadows for main lights
+    spotlight.castShadow = true;
+    spotlight.shadow.bias = -0.001; // Reduce shadow acne
+    spotlight.shadow.mapSize.width = 1024;
+    spotlight.shadow.mapSize.height = 1024;
+    spotlight.shadow.camera.near = 0.1;
+    spotlight.shadow.camera.far = 30.0;
+    spotlight.shadow.focus = 1; // Improved shadow focus
     
     const target = new THREE.Object3D();
     target.position.set(0, -40, 0);
@@ -533,13 +544,13 @@ function createRealisticLightFixture(position, color) {
     beamGroup.position.copy(housingGroup.position);
     beamGroup.position.z -= 0.22;
     
-    // HIGHLY VISIBLE solid beam with multiple layers for better visibility
+    // Create more realistic beam materials with proper blending
     const coreBeam = new THREE.Mesh(
         new THREE.CylinderGeometry(0.02, 0.15, 1, 16, 1, true),
         new THREE.MeshBasicMaterial({
             color: new THREE.Color(0xffffff),
             transparent: true,
-            opacity: 0.95,
+            opacity: 0.7,
             side: THREE.DoubleSide,
             blending: THREE.AdditiveBlending,
             depthWrite: false
@@ -549,9 +560,9 @@ function createRealisticLightFixture(position, color) {
     const midBeam = new THREE.Mesh(
         new THREE.CylinderGeometry(0.05, 0.3, 1, 16, 1, true),
         new THREE.MeshBasicMaterial({
-            color: color,
+            color: color.clone().multiplyScalar(1.5), // Intensify color
             transparent: true,
-            opacity: 0.85,
+            opacity: 0.5,
             side: THREE.DoubleSide,
             blending: THREE.AdditiveBlending,
             depthWrite: false
@@ -563,7 +574,7 @@ function createRealisticLightFixture(position, color) {
         new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.6,
+            opacity: 0.3,
             side: THREE.DoubleSide,
             blending: THREE.AdditiveBlending,
             depthWrite: false
@@ -599,21 +610,20 @@ function createRealisticLightFixture(position, color) {
     };
 }
 
-// Optimized function to update light beams with proper surface collision
+// Optimized function to update lights with realistic effects
 function updateLightArmatures(time) {
     if (!lightArmatures || lightArmatures.length === 0) return;
     
-    // Calculate shared color - use more vibrant colors
+    // Calculate more saturated colors for club lighting
     const hue = (Math.sin(time * 0.1) + 1) / 2;
-    const sharedColor = new THREE.Color().setHSL(hue, 1.0, 0.6);
+    const sharedColor = new THREE.Color().setHSL(hue, 0.95, 0.6);
     
     // Create a raycaster for beam length calculation
     const raycaster = new THREE.Raycaster();
     
-    // Collect all possible collision objects once
+    // Get all scene objects once for collision testing
     const collisionObjects = [];
     scene.traverse(object => {
-        // Include any mesh that isn't a light component, beam, or particle
         if (object.isMesh && 
             !object.userData.isLight && 
             !object.userData.isBeam && 
@@ -627,7 +637,7 @@ function updateLightArmatures(time) {
         }
     });
     
-    // Update each light
+    // Update each light with performance considerations
     for (let i = 0; i < lightArmatures.length; i++) {
         const fixture = lightArmatures[i];
         if (!fixture || !fixture.head) continue;
@@ -635,7 +645,7 @@ function updateLightArmatures(time) {
         // Get rotation direction based on side
         const rotationDirection = fixture.isOnRightSide ? -1 : 1;
         
-        // Calculate vertical and horizontal rotation patterns
+        // Calculate smoother movement patterns
         const verticalAngle = Math.sin(time * 0.2 + i * 0.1) * 0.6 - 0.3;
         const horizontalAngle = Math.sin(time * 0.3 + i * 0.2) * 1.2 * rotationDirection;
         
@@ -643,38 +653,51 @@ function updateLightArmatures(time) {
         fixture.head.rotation.x = verticalAngle;
         fixture.head.rotation.z = horizontalAngle;
         
-        // Update colors with intensity fluctuations
-        const pulseIntensity = 12.0 + Math.sin(time * 2) * 3.0;
+        // Update colors with realistic pulsing - use color temperature variations
+        const baseIntensity = 15.0;
+        const pulseIntensity = baseIntensity + Math.sin(time * 2) * 5.0;
         
         if (fixture.spotlight) {
-            fixture.spotlight.color.copy(sharedColor);
+            // Create subtle color temperature variation
+            const tempVariation = new THREE.Color().setHSL(
+                sharedColor.getHSL({ h: 0, s: 0, l: 0 }).h,
+                0.95, 
+                0.5 + Math.sin(time * 0.7 + i) * 0.1
+            );
+            
+            fixture.spotlight.color.copy(tempVariation);
             fixture.spotlight.intensity = pulseIntensity;
         }
         
         if (fixture.lens && fixture.lens.material) {
             fixture.lens.material.color.copy(sharedColor);
             fixture.lens.material.emissive.copy(sharedColor);
-            fixture.lens.material.emissiveIntensity = 1.5 + Math.sin(time * 2) * 0.5;
+            fixture.lens.material.emissiveIntensity = 1.8 + Math.sin(time * 2) * 0.7;
         }
         
         // Update beam colors and visibility
         if (fixture.beamGroup && fixture.beams) {
-            // Update all beam layers colors and opacity
+            // Update beam layers with realistic fluctuation
             fixture.beams.forEach((beam, index) => {
                 if (beam.material) {
                     if (index === 0) {
-                        // Core beam always white for intensity
+                        // Core beam always white for intensity, but with subtle variations
                         beam.material.color.set(0xffffff);
-                        beam.material.opacity = 0.9 + Math.sin(time * 3) * 0.1;
+                        beam.material.opacity = 0.7 + Math.sin(time * 3 + i) * 0.1;
+                    } else if (index === 1) {
+                        // Mid beam takes color from shared color with boosted brightness
+                        const midColor = sharedColor.clone().multiplyScalar(1.5);
+                        beam.material.color.copy(midColor);
+                        beam.material.opacity = 0.5 + Math.sin(time * 2.2 + i) * 0.1;
                     } else {
-                        // Outer beams take color from shared color
+                        // Outer beam takes color from shared color
                         beam.material.color.copy(sharedColor);
-                        beam.material.opacity = (0.85 - index * 0.2) + Math.sin(time * 2 + i) * 0.15;
+                        beam.material.opacity = 0.3 + Math.sin(time * 1.8 + i) * 0.08;
                     }
                 }
             });
             
-            // Calculate beam origin and direction
+            // Calculate beam intersection with surfaces
             const lightPos = new THREE.Vector3();
             fixture.housing.getWorldPosition(lightPos);
             
@@ -682,16 +705,19 @@ function updateLightArmatures(time) {
             direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
             direction.normalize();
             
-            // Set up raycaster to detect all collisions
+            // Set up raycaster for collision detection
             raycaster.set(lightPos, direction);
             
-            // Find the closest intersection with any surface
+            // Cast ray to find surfaces
             const intersects = raycaster.intersectObjects(collisionObjects);
             
             if (intersects.length > 0) {
                 // Get the closest intersection point
                 const intersection = intersects[0];
                 const distance = intersection.distance;
+                const hitPoint = intersection.point;
+                const normal = intersection.face.normal.clone();
+                normal.transformDirection(intersection.object.matrixWorld);
                 
                 // Scale beams precisely to hit the surface exactly
                 fixture.beams.forEach((beam, index) => {
@@ -700,7 +726,7 @@ function updateLightArmatures(time) {
                     beam.scale.y = distance - zOffset;
                 });
                 
-                // Create light spot on the surface
+                // Create or update light spot on the surface
                 if (!fixture.surfaceSpot) {
                     const spotMaterial = new THREE.MeshBasicMaterial({
                         color: sharedColor,
@@ -718,12 +744,7 @@ function updateLightArmatures(time) {
                     fixture.surfaceSpot = spot;
                 }
                 
-                // Update spot
                 if (fixture.surfaceSpot) {
-                    const hitPoint = intersection.point;
-                    const normal = intersection.face ? intersection.face.normal.clone() : new THREE.Vector3(0, 1, 0);
-                    normal.transformDirection(intersection.object.matrixWorld);
-                    
                     // Position spot slightly above surface to prevent z-fighting
                     fixture.surfaceSpot.position.copy(hitPoint);
                     fixture.surfaceSpot.position.addScaledVector(normal, 0.01);
@@ -735,35 +756,28 @@ function updateLightArmatures(time) {
                     fixture.surfaceSpot.material.color.copy(sharedColor);
                     
                     // Calculate spot size based on distance and angle
-                    const spotSize = 0.3 + (distance * 0.05);
-                    fixture.surfaceSpot.scale.set(spotSize, spotSize, 1);
+                    const angle = fixture.spotlight.angle;
+                    const spotSize = Math.tan(angle) * distance * 1.2; // More accurate cone projection
                     
-                    // Adjust opacity based on angle
-                    const dotProduct = Math.abs(normal.dot(direction));
-                    fixture.surfaceSpot.material.opacity = 0.7 * (1 - dotProduct);
-                    
-                    // Flatten spot when hitting wall vs floor
-                    if (normal.y > 0.9) {
-                        // Floor - keep circular
-                        fixture.surfaceSpot.scale.x = fixture.surfaceSpot.scale.y;
+                    // Calculate dot product between beam direction and surface normal
+                    // for realistic light spread on angled surfaces
+                    // Adjust spot shape based on surface angle
+                    if (Math.abs(normal.y) > 0.9) {
+                        // Floor/ceiling - circular spot
+                        fixture.surfaceSpot.scale.set(spotSize, spotSize, 1);
                     } else {
-                        // Wall - make more elliptical
-                        fixture.surfaceSpot.scale.x = spotSize * 1.5; 
+                        // Wall - elliptical spot - stretch factor based on angle of incidence
+                        const stretchFactor = 1 / Math.max(0.2, Math.abs(dotProduct));
+                        fixture.surfaceSpot.scale.set(spotSize * stretchFactor, spotSize, 1);
                     }
                     
-                    // Make spot visible
-                    fixture.surfaceSpot.visible = true;
+                    // Adjust opacity based on angle of incidence - more grazing angle = brighter
+                    fixture.surfaceSpot.material.opacity = 0.3 + (1 - dotProduct) * 0.6;
                 }
                 
-                // Calculate dust illumination to show beam volume
+                // Illuminate dust particles in beam path
                 if (stationaryDust) {
-                    illuminateStationaryDustParticles(
-                        lightPos,
-                        direction,
-                        sharedColor,
-                        time,
-                        distance  // Pass distance to limit illumination to beam length
-                    );
+                    illuminateStationaryDustParticles(lightPos, direction, sharedColor, time, distance);
                 }
             } else {
                 // If no intersection, hide the spot
@@ -781,7 +795,7 @@ function updateLightArmatures(time) {
     }
 }
 
-// New function to illuminate stationary dust particles when beams pass through them
+// Enhanced dust particle illumination with realistic lighting
 function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor, time, beamLength = 20) {
     if (!stationaryDust) return;
     
@@ -791,7 +805,7 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
     const beamEnd = beamOrigin.clone().addScaledVector(beamDirection, beamLength);
     const beamLine = new THREE.Line3(beamOrigin, beamEnd);
     
-    // Update each dust particle
+    // Update each dust particle with physically plausible scattering
     stationaryDust.children.forEach(particle => {
         // Calculate closest point on beam line to this particle
         const closestPoint = new THREE.Vector3();
@@ -800,15 +814,21 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
         // Calculate distance from particle to closest point on beam
         const distance = particle.position.distanceTo(closestPoint);
         
-        // Check if point is within beam length (distance from origin to closest point)
+        // Check if point is within beam length and radius
         const distanceFromOrigin = beamOrigin.distanceTo(closestPoint);
         
         // If particle is close enough to beam and within beam length, illuminate it
         if (distance < beamRadius && distanceFromOrigin <= beamLength) {
-            // Calculate intensity based on distance (closer = brighter)
-            const intensity = 1.0 - (distance / beamRadius);
+            // Apply inverse square falloff for realistic light scattering
+            const falloffFactor = 1.0 - Math.min(1.0, (distance / beamRadius) * (distance / beamRadius));
             
-            // Illuminate the particle
+            // Calculate dust particle position relative to beam source for light attenuation
+            const beamFalloff = 1.0 - (distanceFromOrigin / beamLength) * 0.7;
+            
+            // Combined intensity with realistic falloff
+            const intensity = falloffFactor * beamFalloff * 0.9;
+            
+            // Illuminate the particle with physically plausible scattering
             if (particle.material) {
                 // Store original values if not already stored
                 if (!particle.userData.originalColor) {
@@ -818,11 +838,15 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
                 
                 // Mix particle color with beam color based on intensity
                 particle.material.color.copy(beamColor);
-                particle.material.opacity = Math.min(0.9, particle.userData.originalOpacity + intensity * 0.7);
                 
-                // Mark as illuminated
+                // Higher opacity for particles closer to beam center
+                particle.material.opacity = Math.min(0.9, 
+                    particle.userData.originalOpacity + intensity * 0.8);
+                
+                // Store illumination status
                 particle.userData.illuminated = true;
                 particle.userData.illuminationTime = time;
+                particle.userData.illuminationIntensity = intensity;
             }
         } 
         // If particle was previously illuminated but now isn't in beam, fade back to normal
@@ -838,13 +862,17 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
                 particle.material.opacity = particle.userData.originalOpacity;
                 particle.userData.illuminated = false;
             } else {
-                // Fade gradually
+                // Fade gradually with easing function for smoother transition
                 const t = elapsed / fadeTime;
+                const easeOut = 1 - Math.pow(1 - t, 2); // Quadratic ease-out
+                
                 if (particle.userData.originalColor) {
-                    particle.material.color.lerp(particle.userData.originalColor, t);
+                    particle.material.color.lerp(particle.userData.originalColor, easeOut);
                 }
+                
+                // Smoothly interpolate opacity back to original
                 particle.material.opacity = particle.userData.originalOpacity + 
-                    (particle.material.opacity - particle.userData.originalOpacity) * (1-t);
+                    (particle.material.opacity - particle.userData.originalOpacity) * (1 - easeOut);
             }
         }
         
