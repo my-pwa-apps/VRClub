@@ -96,40 +96,11 @@
     <!-- Add error display div -->
     <div id="error" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:20px; border-radius:5px;"></div>
 
-    <script type="module" src="scripts/main.js"></script>
-    <script>
-        // Hide loading screen when window is loaded
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                document.getElementById('loading').style.display = 'none';
-            }, 2000);
-        });
+    <script type="module">
+        import { Application } from './src/modules/core/Application.js';
         
-        // Enhanced error handler
-        window.addEventListener('error', function(event) {
-            const errorDiv = document.getElementById('error');
-            let errorMessage = 'Error loading resources. Please refresh the page.';
-            
-            // Check for specific function declaration errors
-            if (event.error instanceof SyntaxError && event.error.message.includes('already been declared')) {
-                errorMessage = 'Duplicate function detected. Please check the console for details.';
-                console.error('Function declaration error:', event.error);
-            }
-            
-            errorDiv.textContent = errorMessage;
-            errorDiv.style.display = 'block';
-        });
-
-        // Wrap script loading
-        try {
-            const script = document.querySelector('script[src="scripts/main.js"]');
-            script.onerror = function() {
-                document.getElementById('error').textContent = 'Failed to load main script';
-                document.getElementById('error').style.display = 'block';
-            };
-        } catch (e) {
-            console.error('Script loading error:', e);
-        }
+        const canvas = document.getElementById('club-scene');
+        const app = new Application(canvas);
     </script>
 </body>
 </html>
