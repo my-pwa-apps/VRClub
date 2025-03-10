@@ -186,6 +186,9 @@ async function createClubEnvironment() {
 
     // Remove the directional fill light to make club darker
     // Let the armature lights provide the primary illumination
+
+    // Add this to your init or createClubEnvironment function
+    const stationaryDust = createStationaryDustParticles();
 }
 
 // Add mirror ball function
@@ -407,34 +410,34 @@ function createLightFixture(position, color) {
     target.position.set(0, -40, 0); // Point far down
     spotlight.target = target;
     
-    // Create enhanced beam group with improved visibility
+    // Create enhanced beam group
     const beamGroup = new THREE.Group();
     
-    // Main visible beam with layered effect for realism - make it more visible
-    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.6, 1, 16, 1, true);
+    // Main visible beam - make it MUCH more visible
+    const beamGeometry = new THREE.CylinderGeometry(0.1, 0.8, 1, 16, 1, true);
     
-    // Outer beam - increase opacity for better visibility
+    // Outer beam - dramatically increase opacity
     const beamMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
-        opacity: 0.4, // Increased from 0.2
+        opacity: 0.7, // Significantly increased from 0.2
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     const mainBeam = new THREE.Mesh(beamGeometry, beamMaterial);
     
-    // Inner beam - brighter core with higher opacity
+    // Inner beam - much brighter core
     const coreBeamMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 0.7, // Increased from 0.4
+        opacity: 0.9, // Increased to make beam very visible
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     const coreBeam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.25, 1, 8, 1, true),
+        new THREE.CylinderGeometry(0.05, 0.4, 1, 12, 1, true),
         coreBeamMaterial
     );
     
@@ -478,7 +481,7 @@ function createLightFixture(position, color) {
         head,
         spotlight,
         beamGroup,
-        beams: [mainBeam, coreBeam, glowBeam], // Include the new glow beam
+        beams: [mainBeam, coreBeam],
         lens,
         color,
         target,
@@ -487,49 +490,99 @@ function createLightFixture(position, color) {
     };
 }
 
-// New function for creating realistic dust particles
-function createBeamDustParticles(color, count = 30) {
+// New function for creating stationary dust particles in the club space
+function createStationaryDustParticles() {
     const particles = new THREE.Group();
+    const particleCount = 500;
+    const volume = new THREE.Box3(
+        new THREE.Vector3(-8, 0, -8),
+        new THREE.Vector3(8, 7, 8)
+    );
     
-    // Create individual particles
-    for (let i = 0; i < count; i++) {
-        // Randomize size for more realistic dust
-        const size = 0.01 + Math.random() * 0.04;
-        
+    // Create a shared geometry for performance
+    const particleGeometry = new THREE.SphereGeometry(0.02, 4, 4);
+    
+    // Create a collection of materials with different opacities
+    const materials = [
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.3,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.2,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        }),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.1,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    ];
+    
+    for (let i = 0; i < particleCount; i++) {
         const particle = new THREE.Mesh(
-            new THREE.SphereGeometry(size, 8, 8),
-            new THREE.MeshBasicMaterial({
-                color: color,
-                transparent: true,
-                opacity: 0.1 + Math.random() * 0.4,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
-            })
+            particleGeometry,
+            materials[Math.floor(Math.random() * materials.length)]
         );
         
-        // Position particles along entire beam path
-        const radius = Math.random() * 0.2 * (0.3 + Math.random()); // Wider distribution
-        const theta = Math.random() * Math.PI * 2;
-        const y = -Math.random() * 20; // Distribute along full length
-        
+        // Position randomly within the volume
         particle.position.set(
-            Math.sin(theta) * radius,
-            y,
-            Math.cos(theta) * radius
+            volume.min.x + Math.random() * (volume.max.x - volume.min.x),
+            volume.min.y + Math.random() * (volume.max.y - volume.min.y),
+            volume.min.z + Math.random() * (volume.max.z - volume.min.z)
         );
         
-        // Store movement data
+        // Random scale for variety
+        const scale = 0.3 + Math.random() * 0.7;
+        particle.scale.set(scale, scale, scale);
+        
+        // Store original color and state
         particle.userData = {
-            speed: 0.01 + Math.random() * 0.04,
-            radius: radius,
-            theta: theta,
-            thetaSpeed: (Math.random() - 0.5) * 0.02, // Rotation around beam
-            yStart: y,
-            yLimit: -0.5 // Rise until near origin
+            originalOpacity: particle.material.opacity,
+            illuminated: false,
+            illuminationColor: new THREE.Color(),
+            illuminationIntensity: 0,
+            driftVelocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.002,
+                (Math.random() - 0.5) * 0.001,
+                (Math.random() - 0.5) * 0.002
+            )
         };
         
         particles.add(particle);
     }
+    
+    scene.add(particles);
+    return particles;
+}
+
+// Create beam dust particles that are actually beams, not particles
+function createBeamDustParticles(color, count = 50) {
+    const particles = new THREE.Group();
+    
+    // Add a solid visible beam first
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    
+    const solidBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.5, 1, 16, 1, true),
+        beamMaterial
+    );
+    particles.add(solidBeam);
     
     return particles;
 }
@@ -622,6 +675,89 @@ function updateLightArmatures(time) {
             }
         }
     }
+}
+
+// New function to illuminate stationary dust particles when beams pass through them
+function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor, time) {
+    if (!window.stationaryDust) return;
+    
+    const beamRadius = 0.5; // Effective radius of the beam
+    const beamLength = 20;   // Maximum beam length
+    
+    // Create beam line for testing
+    const beamEnd = beamOrigin.clone().addScaledVector(beamDirection, beamLength);
+    const beamLine = new THREE.Line3(beamOrigin, beamEnd);
+    
+    // Update each dust particle
+    window.stationaryDust.children.forEach(particle => {
+        // Calculate closest point on beam line to this particle
+        const closestPoint = new THREE.Vector3();
+        beamLine.closestPointToPoint(particle.position, true, closestPoint);
+        
+        // Calculate distance from particle to closest point on beam
+        const distance = particle.position.distanceTo(closestPoint);
+        
+        // If particle is close enough to beam, illuminate it
+        if (distance < beamRadius) {
+            // Calculate intensity based on distance (closer = brighter)
+            const intensity = 1.0 - (distance / beamRadius);
+            
+            // Illuminate the particle
+            if (particle.material) {
+                // Store original values if not already stored
+                if (!particle.userData.originalColor) {
+                    particle.userData.originalColor = particle.material.color.clone();
+                    particle.userData.originalOpacity = particle.material.opacity;
+                }
+                
+                // Mix particle color with beam color based on intensity
+                particle.material.color.copy(beamColor);
+                particle.material.opacity = Math.min(0.9, particle.userData.originalOpacity + intensity * 0.7);
+                
+                // Mark as illuminated
+                particle.userData.illuminated = true;
+                particle.userData.illuminationTime = time;
+            }
+        } 
+        // If particle was previously illuminated but now isn't in beam, fade back to normal
+        else if (particle.userData.illuminated) {
+            const fadeTime = 0.5; // Time to fade back to normal in seconds
+            const elapsed = time - particle.userData.illuminationTime;
+            
+            if (elapsed > fadeTime) {
+                // Reset to original values
+                if (particle.userData.originalColor) {
+                    particle.material.color.copy(particle.userData.originalColor);
+                }
+                particle.material.opacity = particle.userData.originalOpacity;
+                particle.userData.illuminated = false;
+            } else {
+                // Fade gradually
+                const t = elapsed / fadeTime;
+                if (particle.userData.originalColor) {
+                    particle.material.color.lerp(particle.userData.originalColor, t);
+                }
+                particle.material.opacity = particle.userData.originalOpacity + 
+                    (particle.material.opacity - particle.userData.originalOpacity) * (1-t);
+            }
+        }
+        
+        // Move particles slowly for subtle drift effect
+        if (particle.userData.driftVelocity) {
+            particle.position.add(particle.userData.driftVelocity);
+            
+            // Boundaries check to keep particles in club volume
+            if (Math.abs(particle.position.x) > 9) {
+                particle.userData.driftVelocity.x *= -1;
+            }
+            if (particle.position.y < 0.1 || particle.position.y > 9) {
+                particle.userData.driftVelocity.y *= -1;
+            }
+            if (Math.abs(particle.position.z) > 9) {
+                particle.userData.driftVelocity.z *= -1;
+            }
+        }
+    });
 }
 
 // Create dancing NPCs
@@ -1247,10 +1383,16 @@ function checkWebGLCompatibility() {
     }
 }
 
+// Modify the animate function to store stationaryDust globally
 function animate() {
     try {
         const delta = clock.getDelta();
         const time = clock.getElapsedTime();
+        
+        // Store reference to stationary dust for global access
+        if (!window.stationaryDust && stationaryDust) {
+            window.stationaryDust = stationaryDust;
+        }
         
         // Only update camera movement via keyboard when not in VR
         if (!renderer.xr.isPresenting) {
