@@ -109,17 +109,36 @@ function onKeyUp(event) {
 }
 
 async function createClubEnvironment() {
-    // Add basic placeholder materials in case textures fail to load
-    const floorMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x555555,
-        roughness: 0.8,
-        metalness: 0.1
+    // Load textures first
+    const textureLoader = new THREE.TextureLoader();
+    const [woodTexture, woodNormal, stoneTexture, stoneNormal] = await Promise.all([
+        textureLoader.loadAsync('https://threejs.org/examples/textures/hardwood2_diffuse.jpg'),
+        textureLoader.loadAsync('https://threejs.org/examples/textures/hardwood2_normal.jpg'),
+        textureLoader.loadAsync('https://threejs.org/examples/textures/brick_diffuse.jpg'),
+        textureLoader.loadAsync('https://threejs.org/examples/textures/brick_bump.jpg')
+    ]);
+
+    // Configure textures
+    [woodTexture, woodNormal, stoneTexture, stoneNormal].forEach(texture => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(4, 4);
     });
-    
+
+    // Create materials with loaded textures
+    const floorMaterial = new THREE.MeshStandardMaterial({
+        map: woodTexture,
+        normalMap: woodNormal,
+        color: 0xaaaaaa,
+        metalness: 0.2,
+        roughness: 0.8
+    });
+
     const wallMaterial = new THREE.MeshStandardMaterial({
-        color: 0x888888,
-        roughness: 1.0,
-        metalness: 0.0
+        map: stoneTexture,
+        normalMap: stoneNormal,
+        color: 0xcccccc,
+        metalness: 0.0,
+        roughness: 1.0
     });
 
     // Floor with fallback material
@@ -176,15 +195,6 @@ async function createClubEnvironment() {
     // Create detailed areas
     createDJBooth();
     createBar();
-
-    // Try to load textures after basic geometry is in place
-    try {
-        const woodTexture = await new THREE.TextureLoader().loadAsync('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
-        floorMaterial.map = woodTexture;
-        floorMaterial.needsUpdate = true;
-    } catch (error) {
-        console.warn('Failed to load wood texture:', error);
-    }
 }
 
 function createLightingArmatures() {
@@ -243,28 +253,52 @@ function createMovingLightArmature() {
     );
     head.add(housing);
     
-    // Lens
+    // Add spotlight
+    const spotlight = new THREE.SpotLight(0xffffff, 15);
+    spotlight.angle = Math.PI / 12;
+    spotlight.penumbra = 0.3;
+    spotlight.decay = 1;
+    spotlight.distance = 20;
+    spotlight.castShadow = true;
+    
+    // Create lens that glows
     const lens = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.12, 0.1, 16),
         new THREE.MeshPhongMaterial({
             color: 0xffffff,
             emissive: 0xffffff,
-            emissiveIntensity: 0.5,
+            emissiveIntensity: 1,
             transparent: true,
             opacity: 0.9
         })
     );
     lens.rotation.x = Math.PI / 2;
     lens.position.set(0, -0.2, 0);
-    head.add(lens);
     
+    // Create light beam
+    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.2, 10, 16, 8, true);
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+    });
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+    beam.position.y = -5;
+    beam.rotation.x = Math.PI;
+    
+    head.add(lens);
+    head.add(spotlight);
+    head.add(beam);
     head.position.y = -0.3;
     group.add(head);
     
     return {
-        group: group,
-        head: head,
-        lens: lens,
+        group,
+        head,
+        lens,
+        spotlight,
+        beam,
         basePosition: group.position.clone()
     };
 }
@@ -563,9 +597,16 @@ function updateLightArmatures(time) {
         armature.head.rotation.x = rotationX;
         armature.head.rotation.z = rotationZ;
         
-        // Update lens color
-        armature.lens.material.color = color;
-        armature.lens.material.emissive = color;
+        // Update colors
+        armature.lens.material.color.copy(color);
+        armature.lens.material.emissive.copy(color);
+        armature.spotlight.color.copy(color);
+        armature.beam.material.color.copy(color);
+        
+        // Update spotlight and beam intensity
+        const intensity = 1 + Math.sin(time * 2) * 0.3;
+        armature.spotlight.intensity = intensity * 15;
+        armature.beam.material.opacity = intensity * 0.1;
     });
 }
 
