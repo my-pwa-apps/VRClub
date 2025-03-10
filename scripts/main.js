@@ -12,6 +12,11 @@ let mixer;
 let smokeParticles = [];
 let lights = [];
 let videoScreen;
+let lasers = [];
+let lightingPatterns = [];
+let currentPattern = 0;
+let lastPatternChange = 0;
+const PATTERN_DURATION = 15; // seconds between pattern changes
 
 function init() {
     scene = new THREE.Scene();
@@ -168,6 +173,12 @@ function createClubEnvironment() {
     
     // Create smoke effects
     createSmokeEffects();
+
+    // Create lasers
+    createLasers();
+
+    // Create smoke emitters
+    createSmokeEmitters();
 }
 
 function createDJBooth() {
@@ -271,6 +282,92 @@ function createClubLighting() {
             }
         }
     }
+
+    // Add visible light beams to spotlights
+    lights.forEach(lightObj => {
+        if (!lightObj.type) { // Only for moving spotlights
+            const beamGeometry = new THREE.CylinderGeometry(0, 0.5, 8, 8);
+            const beamMaterial = new THREE.MeshBasicMaterial({
+                color: lightObj.light.color,
+                transparent: true,
+                opacity: 0.1,
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending
+            });
+            const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+            beam.position.copy(lightObj.light.position);
+            beam.rotation.x = Math.PI / 2;
+            scene.add(beam);
+            lightObj.beam = beam;
+        }
+    });
+}
+
+function createLasers() {
+    const laserPositions = [
+        { x: -9, y: 8, z: -9 },
+        { x: 9, y: 8, z: -9 },
+        { x: -9, y: 8, z: 9 },
+        { x: 9, y: 8, z: 9 }
+    ];
+
+    laserPositions.forEach((pos, i) => {
+        // Create physical laser device
+        const base = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.3, 0.3),
+            new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 })
+        );
+        base.position.set(pos.x, pos.y, pos.z);
+        scene.add(base);
+
+        // Create laser beam
+        const laserGeometry = new THREE.BufferGeometry();
+        const laserMaterial = new THREE.LineBasicMaterial({
+            color: i % 2 === 0 ? 0xff0000 : 0x00ff00,
+            linewidth: 1,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending
+        });
+
+        const line = new THREE.Line(laserGeometry, laserMaterial);
+        scene.add(line);
+
+        lasers.push({
+            base: base,
+            beam: line,
+            color: laserMaterial.color,
+            phase: i * Math.PI / 2
+        });
+    });
+}
+
+function createSmokeEmitters() {
+    const emitterPositions = [
+        { x: -9, y: 0.5, z: -8 },
+        { x: 9, y: 0.5, z: -8 },
+        { x: -9, y: 0.5, z: 8 },
+        { x: 9, y: 0.5, z: 8 }
+    ];
+
+    emitterPositions.forEach(pos => {
+        // Create physical smoke machine
+        const machine = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 0.5, 0.4),
+            new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7 })
+        );
+        machine.position.set(pos.x, pos.y, pos.z);
+        scene.add(machine);
+
+        // Create nozzle
+        const nozzle = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.15, 0.2, 8),
+            new THREE.MeshStandardMaterial({ color: 0x222222 })
+        );
+        nozzle.rotation.x = -Math.PI / 4;
+        nozzle.position.set(pos.x, pos.y + 0.2, pos.z);
+        scene.add(nozzle);
+    });
 }
 
 function createSmokeEffects() {
@@ -359,33 +456,27 @@ function updateMovement(delta) {
 function updateLightingEffects(delta) {
     const time = clock.getElapsedTime();
     
-    // Update spotlights
-    lights.forEach((lightObj, index) => {
-        if (lightObj.type === 'danceFloor') {
-            // Dance floor lights pulsing effect
-            const pulseSpeed = time * 2 + index * 0.2;
-            const intensity = 0.1 + Math.sin(pulseSpeed) * 0.2 + Math.cos(pulseSpeed * 0.7) * 0.1;
-            lightObj.light.intensity = intensity;
-            
-            // Occasionally change color
-            if (Math.random() > 0.995) {
-                const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xffff00, 0x00ffff];
-                lightObj.light.color.setHex(colors[Math.floor(Math.random() * colors.length)]);
-            }
-        } else {
-            // Moving spotlights
-            const angle = time * lightObj.speed;
-            lightObj.light.position.x = lightObj.initialPos.x + Math.sin(angle) * lightObj.movementRadius;
-            lightObj.light.position.z = lightObj.initialPos.z + Math.cos(angle) * lightObj.movementRadius;
-            
-            // Make the spotlights look at the dance floor center
-            const target = lightObj.light.target;
-            target.position.x = Math.sin(angle * 1.5) * 5;
-            target.position.z = Math.cos(angle * 1.5) * 5;
-            target.position.y = 0;
-            target.updateMatrixWorld();
-        }
-    });
+    // Check if it's time to change patterns
+    if (time - lastPatternChange > PATTERN_DURATION) {
+        currentPattern = (currentPattern + 1) % lightingPatterns.length;
+        lastPatternChange = time;
+    }
+
+    // Update lights based on current pattern
+    switch (currentPattern) {
+        case 0: // Synchronized wave
+            updateSynchronizedWave(time);
+            break;
+        case 1: // Random strobe
+            updateRandomStrobe(time);
+            break;
+        case 2: // Circular chase
+            updateCircularChase(time);
+            break;
+    }
+
+    // Update laser beams
+    updateLaserBeams(time);
 }
 
 function updateSmokeEffects(delta) {
@@ -421,6 +512,67 @@ function updateSmokeEffects(delta) {
                 (Math.random() - 0.3) * 0.01,
                 (Math.random() - 0.5) * 0.02
             );
+        }
+
+        // Add turbulence
+        particle.userData.velocity.x += (Math.random() - 0.5) * 0.002;
+        particle.userData.velocity.z += (Math.random() - 0.5) * 0.002;
+        
+        // Gradual rise
+        particle.userData.velocity.y += 0.0001;
+    });
+}
+
+function updateLaserBeams(time) {
+    lasers.forEach((laser, i) => {
+        const points = [];
+        const startPoint = laser.base.position.clone();
+        
+        // Create dynamic curve for laser beam
+        for (let t = 0; t < 1; t += 0.1) {
+            const x = startPoint.x + Math.sin(time * 2 + laser.phase + t * Math.PI) * 3;
+            const y = startPoint.y - t * 8;
+            const z = startPoint.z + Math.cos(time * 2 + laser.phase + t * Math.PI) * 3;
+            points.push(new THREE.Vector3(x, y, z));
+        }
+
+        laser.beam.geometry.setFromPoints(points);
+        laser.beam.geometry.verticesNeedUpdate = true;
+    });
+}
+
+// Add these new pattern functions
+function updateSynchronizedWave(time) {
+    const wavePos = Math.sin(time) * 5;
+    lights.forEach((lightObj, i) => {
+        if (!lightObj.type) {
+            lightObj.light.target.position.x = wavePos;
+            lightObj.beam.position.copy(lightObj.light.position);
+            lightObj.beam.lookAt(lightObj.light.target.position);
+        }
+    });
+}
+
+function updateRandomStrobe(time) {
+    if (Math.random() > 0.9) {
+        lights.forEach(lightObj => {
+            if (!lightObj.type) {
+                lightObj.light.intensity = Math.random() * 3;
+                lightObj.beam.material.opacity = lightObj.light.intensity * 0.1;
+            }
+        });
+    }
+}
+
+function updateCircularChase(time) {
+    lights.forEach((lightObj, i) => {
+        if (!lightObj.type) {
+            const angle = time * 2 + (i * Math.PI / 2);
+            const x = Math.sin(angle) * 5;
+            const z = Math.cos(angle) * 5;
+            lightObj.light.target.position.set(x, 0, z);
+            lightObj.beam.position.copy(lightObj.light.position);
+            lightObj.beam.lookAt(lightObj.light.target.position);
         }
     });
 }
