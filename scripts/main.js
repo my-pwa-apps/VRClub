@@ -19,7 +19,7 @@ let currentPattern = 0;
 let lastPatternChange = 0;
 const PATTERN_DURATION = 15; // seconds between pattern changes
 
-function init() {
+async function init() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
@@ -69,7 +69,7 @@ function init() {
     setupKeyboardControls();
     
     // Create the club environment
-    createClubEnvironment();
+    await createClubEnvironment();
     
     // Setup event listeners
     setupEventListeners();
@@ -122,51 +122,83 @@ function setupKeyboardControls() {
     });
 }
 
-function createClubEnvironment() {
-    // Add walls and ceiling
-    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
+async function createClubEnvironment() {
+    // Create concrete materials for club surfaces
+    const concreteTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/brick_diffuse.jpg');
+    concreteTexture.wrapS = THREE.RepeatWrapping;
+    concreteTexture.wrapT = THREE.RepeatWrapping;
+    concreteTexture.repeat.set(4, 4);
+    
+    const concreteNormal = new THREE.TextureLoader().load('https://threejs.org/examples/textures/brick_bump.jpg');
+    concreteNormal.wrapS = THREE.RepeatWrapping;
+    concreteNormal.wrapT = THREE.RepeatWrapping;
+    concreteNormal.repeat.set(4, 4);
+    
+    const concreteMaterial = new THREE.MeshStandardMaterial({ 
+        map: concreteTexture, 
+        normalMap: concreteNormal,
+        roughness: 0.9,
+        color: 0x999999
+    });
+    
+    // Create darker floor material
+    const floorTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(8, 8);
+    
+    const floorMaterial = new THREE.MeshStandardMaterial({ 
+        map: floorTexture,
+        color: 0x333333,
+        roughness: 0.8
+    });
     
     // Back wall
     const backWall = new THREE.Mesh(
         new THREE.BoxGeometry(20, 10, 0.2),
-        wallMaterial
+        concreteMaterial
     );
     backWall.position.set(0, 5, -10);
+    backWall.receiveShadow = true;
     scene.add(backWall);
+    
+    // Add minimal club logo/name to back wall
+    const logoGeometry = new THREE.PlaneGeometry(6, 1.5);
+    const logoMaterial = new THREE.MeshBasicMaterial({
+        color: 0x3333ff,
+        transparent: true,
+        opacity: 0.8
+    });
+    const logo = new THREE.Mesh(logoGeometry, logoMaterial);
+    logo.position.set(0, 8, -9.9);
+    scene.add(logo);
     
     // Side walls
     const leftWall = new THREE.Mesh(
         new THREE.BoxGeometry(0.2, 10, 20),
-        wallMaterial
+        concreteMaterial
     );
     leftWall.position.set(-10, 5, 0);
+    leftWall.receiveShadow = true;
     scene.add(leftWall);
     
     const rightWall = new THREE.Mesh(
         new THREE.BoxGeometry(0.2, 10, 20),
-        wallMaterial
+        concreteMaterial
     );
     rightWall.position.set(10, 5, 0);
+    rightWall.receiveShadow = true;
     scene.add(rightWall);
     
     // Ceiling
     const ceiling = new THREE.Mesh(
         new THREE.BoxGeometry(20, 0.2, 20),
-        wallMaterial
+        concreteMaterial
     );
     ceiling.position.set(0, 10, 0);
     scene.add(ceiling);
     
-    // Improve the floor with texture
-    const floorTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(4, 4);
-    
-    const floorMaterial = new THREE.MeshStandardMaterial({ 
-        map: floorTexture,
-        color: 0x333333
-    });
+    // Floor
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(20, 20),
         floorMaterial
@@ -177,6 +209,9 @@ function createClubEnvironment() {
     
     // Create DJ booth
     createDJBooth();
+    
+    // Create bar
+    createBar();
     
     // Create club lighting
     createClubLighting();
@@ -192,88 +227,178 @@ function createClubEnvironment() {
 }
 
 function createDJBooth() {
-    // DJ Booth platform
-    const boothGeometry = new THREE.BoxGeometry(6, 0.5, 3);
-    const boothMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+    // DJ Booth platform - more industrial style
+    const boothGeometry = new THREE.BoxGeometry(6, 0.6, 3);
+    const metalTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/metal.jpg');
+    const boothMaterial = new THREE.MeshStandardMaterial({ 
+        map: metalTexture,
+        color: 0x333333,
+        metalness: 0.7,
+        roughness: 0.3
+    });
     const booth = new THREE.Mesh(boothGeometry, boothMaterial);
-    booth.position.set(0, 0.25, -8);
+    booth.position.set(0, 0.3, -8);
     booth.castShadow = true;
     booth.receiveShadow = true;
     scene.add(booth);
     
-    // DJ Equipment
+    // DJ Equipment 
     const consoleGeometry = new THREE.BoxGeometry(4, 0.8, 1.5);
-    const consoleMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const consoleMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x222222,
+        metalness: 0.8,
+        roughness: 0.2
+    });
     const console = new THREE.Mesh(consoleGeometry, consoleMaterial);
     console.position.set(0, 0.9, -8);
     console.castShadow = true;
     console.receiveShadow = true;
     scene.add(console);
     
-    // Video wall behind DJ
-    const videoGeometry = new THREE.PlaneGeometry(12, 8);
+    // CDJ/Mixer details
+    const cdj1 = createCDJ(-1, 1.3, -7.5);
+    const cdj2 = createCDJ(1, 1.3, -7.5);
+    const mixer = createMixer(0, 1.3, -8);
     
-    // Create video material with fallback
-    const videoMaterial = createVideoWallMaterial();
-    
-    videoScreen = new THREE.Mesh(videoGeometry, videoMaterial);
-    videoScreen.position.set(0, 5, -9.8);
-    scene.add(videoScreen);
+    scene.add(cdj1);
+    scene.add(cdj2);
+    scene.add(mixer);
 }
 
-function createVideoWallMaterial() {
-    // Try to load video first
-    const videoElement = document.createElement('video');
-    videoElement.crossOrigin = "anonymous"; // Add CORS header
+function createCDJ(x, y, z) {
+    const cdjGroup = new THREE.Group();
     
-    // Create a default animated material as fallback
-    const fallbackMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-            time: { value: 0 },
-            resolution: { value: new THREE.Vector2(1024, 1024) }
-        },
-        vertexShader: `
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `,
-        fragmentShader: `
-            uniform float time;
-            uniform vec2 resolution;
-            varying vec2 vUv;
-            
-            void main() {
-                vec2 p = (gl_FragCoord.xy / resolution.xy) * 2.0 - 1.0;
-                vec3 color = vec3(0.0);
-                float t = time * 0.5;
-                
-                // Create animated pattern
-                for(float i = 1.0; i < 4.0; i++) {
-                    p.x += 0.6 / i * cos(i * 2.5 * p.y + t);
-                    p.y += 0.6 / i * cos(i * 1.5 * p.x + t);
-                }
-                
-                color = vec3(0.1, 0.5 + 0.5 * sin(p.x), 0.5 + 0.5 * cos(p.y));
-                gl_FragColor = vec4(color, 1.0);
-            }
-        `
-    });
+    // Main body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.1, 0.8),
+        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8 })
+    );
     
-    // Try to load local video first, then fallback to remote, then shader
-    try {
-        videoElement.src = 'assets/visuals.mp4'; // Local video file
-        videoElement.loop = true;
-        videoElement.muted = true;
-        videoElement.play();
-        
-        const videoTexture = new THREE.VideoTexture(videoElement);
-        return new THREE.MeshBasicMaterial({ map: videoTexture });
-    } catch (error) {
-        console.warn('Video loading failed, using fallback shader pattern');
-        return fallbackMaterial;
+    // Jog wheel
+    const jogWheel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.25, 0.25, 0.05, 20),
+        new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7 })
+    );
+    jogWheel.rotation.x = Math.PI / 2;
+    jogWheel.position.y = 0.05;
+    
+    cdjGroup.add(body);
+    cdjGroup.add(jogWheel);
+    cdjGroup.position.set(x, y, z);
+    
+    return cdjGroup;
+}
+
+function createMixer(x, y, z) {
+    const mixerGroup = new THREE.Group();
+    
+    // Main body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 0.1, 0.6),
+        new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8 })
+    );
+    
+    // Faders
+    for (let i = 0; i < 4; i++) {
+        const fader = new THREE.Mesh(
+            new THREE.BoxGeometry(0.05, 0.02, 0.3),
+            new THREE.MeshStandardMaterial({ color: 0x999999 })
+        );
+        fader.position.set(0.1 + i * 0.2, 0.06, 0);
+        mixerGroup.add(fader);
     }
+    
+    mixerGroup.add(body);
+    mixerGroup.position.set(x, y, z);
+    
+    return mixerGroup;
+}
+
+function createBar() {
+    // Bar counter
+    const barGeometry = new THREE.BoxGeometry(8, 1.1, 1.5);
+    const barMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x222222, 
+        metalness: 0.3, 
+        roughness: 0.8 
+    });
+    const bar = new THREE.Mesh(barGeometry, barMaterial);
+    bar.position.set(-5, 0.55, 7);
+    bar.castShadow = true;
+    bar.receiveShadow = true;
+    scene.add(bar);
+    
+    // Bar top
+    const barTopGeometry = new THREE.BoxGeometry(8.2, 0.1, 1.7);
+    const barTopMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x111111, 
+        metalness: 0.8, 
+        roughness: 0.2 
+    });
+    const barTop = new THREE.Mesh(barTopGeometry, barTopMaterial);
+    barTop.position.set(-5, 1.15, 7);
+    scene.add(barTop);
+    
+    // Back counter
+    const backCounterGeometry = new THREE.BoxGeometry(8, 2, 0.6);
+    const backCounterMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x222222, 
+        metalness: 0.3, 
+        roughness: 0.8 
+    });
+    const backCounter = new THREE.Mesh(backCounterGeometry, backCounterMaterial);
+    backCounter.position.set(-5, 1, 8.5);
+    scene.add(backCounter);
+    
+    // Create bottles
+    for (let i = 0; i < 10; i++) {
+        const bottle = createBottle();
+        bottle.position.set(-8.5 + i * 0.7, 2.1, 8.5);
+        scene.add(bottle);
+    }
+    
+    // Create spotlights for the bar
+    const barLight1 = new THREE.SpotLight(0x3366ff, 1);
+    barLight1.position.set(-7, 5, 7);
+    barLight1.angle = Math.PI / 8;
+    barLight1.penumbra = 0.2;
+    barLight1.castShadow = true;
+    barLight1.target.position.set(-7, 0, 7);
+    scene.add(barLight1);
+    scene.add(barLight1.target);
+    
+    const barLight2 = new THREE.SpotLight(0x3366ff, 1);
+    barLight2.position.set(-3, 5, 7);
+    barLight2.angle = Math.PI / 8;
+    barLight2.penumbra = 0.2;
+    barLight2.castShadow = true;
+    barLight2.target.position.set(-3, 0, 7);
+    scene.add(barLight2);
+    scene.add(barLight2.target);
+}
+
+function createBottle() {
+    const bottleGroup = new THREE.Group();
+    
+    // Bottle body
+    const bodyGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.6, 8);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ 
+        color: Math.random() > 0.5 ? 0x555555 : 0x333355, 
+        transparent: true, 
+        opacity: 0.8,
+        metalness: 0 
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    
+    // Bottle neck
+    const neckGeometry = new THREE.CylinderGeometry(0.03, 0.05, 0.2, 8);
+    const neck = new THREE.Mesh(neckGeometry, bodyMaterial);
+    neck.position.y = 0.4;
+    
+    bottleGroup.add(body);
+    bottleGroup.add(neck);
+    
+    return bottleGroup;
 }
 
 function createClubLighting() {
@@ -462,12 +587,6 @@ function animate() {
     // Update controls and render scene
     controls.update();
     renderer.render(scene, camera);
-
-    // Update video wall shader if using fallback
-    const material = videoScreen.material;
-    if (material.type === 'ShaderMaterial') {
-        material.uniforms.time.value = time;
-    }
 }
 
 function updateMovement(delta) {
@@ -736,4 +855,4 @@ function debounce(fn, ms) {
     };
 }
 
-init();
+init().catch(console.error);
