@@ -24,15 +24,34 @@ export class StationaryDust {
         }
     }
 
-    update(time) {
-        // Update particle positions and illumination
-        this.particles.children.forEach(particle => {
-            if (particle.userData.driftVelocity) {
-                particle.position.add(particle.userData.driftVelocity);
-                this.checkBounds(particle);
+    positionParticle(particle) {
+        // Random position within club volume
+        particle.position.set(
+            (Math.random() - 0.5) * 18,
+            Math.random() * 8 + 1,
+            (Math.random() - 0.5) * 18
+        );
+        
+        // Add drift velocity
+        particle.userData.driftVelocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.01,
+            (Math.random() - 0.5) * 0.01,
+            (Math.random() - 0.5) * 0.01
+        );
+    }
+
+    checkBounds(particle) {
+        const bounds = {
+            x: [-9, 9],
+            y: [0.1, 9],
+            z: [-9, 9]
+        };
+        
+        ['x', 'y', 'z'].forEach(axis => {
+            if (particle.position[axis] < bounds[axis][0] || 
+                particle.position[axis] > bounds[axis][1]) {
+                particle.userData.driftVelocity[axis] *= -1;
             }
         });
     }
-
-    // ... helper methods for positioning and bounds checking
 }

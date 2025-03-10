@@ -23,5 +23,34 @@ export class LightingSystem {
         if (this.stationaryDust) this.stationaryDust.update(time);
     }
 
-    // ... implementation of helper methods
+    setupAmbientLighting() {
+        const ambient = new THREE.AmbientLight(0x111111, 0.05);
+        const fillLight = new THREE.HemisphereLight(0x2233ff, 0x221122, 0.05);
+        this.scene.add(ambient);
+        this.scene.add(fillLight);
+    }
+
+    async createMovingLights() {
+        const positions = [
+            [-7, 9.8, -8], [0, 9.8, -8], [7, 9.8, -8],
+            [-7, 9.8, 8], [0, 9.8, 8], [7, 9.8, 8]
+        ];
+
+        positions.forEach(pos => {
+            const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
+            const light = new MovingLight(new THREE.Vector3(...pos), color);
+            this.lights.push(light);
+            this.scene.add(light.group);
+        });
+    }
+
+    async createMirrorBall() {
+        this.mirrorBall = new MirrorBall();
+        this.scene.add(this.mirrorBall.group);
+    }
+
+    createStationaryDust() {
+        this.stationaryDust = new StationaryDust();
+        this.scene.add(this.stationaryDust.particles);
+    }
 }
