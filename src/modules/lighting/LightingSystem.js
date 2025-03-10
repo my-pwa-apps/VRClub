@@ -84,15 +84,22 @@ export class LightingSystem {
     }
 
     update(time) {
-        this.lights.forEach(light => {
-            if (light.update) light.update(time);
-        });
-
-        if (this.mirrorBall && this.mirrorBall.update) {
+        // Safely update all lights with null checking
+        if (this.lights && this.lights.length) {
+            this.lights.forEach(light => {
+                if (light && typeof light.update === 'function') {
+                    light.update(time);
+                }
+            });
+        }
+        
+        // Safely update mirror ball if it exists
+        if (this.mirrorBall && typeof this.mirrorBall.update === 'function') {
             this.mirrorBall.update(time);
         }
-
-        if (this.stationaryDust && this.stationaryDust.update) {
+        
+        // Safely update dust particles if they exist
+        if (this.stationaryDust && typeof this.stationaryDust.update === 'function') {
             this.stationaryDust.update(time);
         }
     }

@@ -108,23 +108,39 @@ export class Application {
             const delta = this.clock.getDelta();
             const time = this.clock.getElapsedTime();
 
-            // Fix: Access the actual WebGLRenderer instance through our wrapper
-            const isVRPresenting = this.renderer.renderer?.xr?.isPresenting;
+            // Check if XR is presenting before accessing
+            const isVRPresenting = this.renderer && 
+                                  this.renderer.renderer && 
+                                  this.renderer.renderer.xr && 
+                                  this.renderer.renderer.xr.isPresenting;
 
-            // Update systems
-            if (!isVRPresenting) {
+            // Update input when not in VR
+            if (!isVRPresenting && this.systems.input) {
                 this.systems.input.update(delta);
             }
             
-            this.systems.lighting.update(time);
-            this.systems.characters.update(delta);
-            this.systems.environment.update(time);
+            // Safely update each system with null checking
+            Object.entries(this.systems).forEach(([name, system]) => {
+                if (system && typeof system.update === 'function') {
+                    try {
+                        // Different systems may expect different arguments
+                        if (name === 'lighting' || name === 'environment') {
+                            system.update(time);
+                        } else {
+                            system.update(delta);
+                        }
+                    } catch (err) {
+                        console.error(`Error updating ${name} system:`, err);
+                    }
+                }
+            });
 
-            // Render scene
-            this.renderer.render(this.scene, this.camera);
+            // Render the scene
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
+            }
         } catch (error) {
             console.error('Runtime error:', error);
-            this.renderer.setAnimationLoop(null);
             this.showError(`Runtime error: ${error.message}`);
         }
 

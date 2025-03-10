@@ -148,15 +148,29 @@
     <script type="module">
         import { Application } from './src/modules/core/Application.js';
         
-        // Make sure DOM is fully loaded
+        // Wait for DOM to be fully loaded
         document.addEventListener('DOMContentLoaded', () => {
-            const canvas = document.getElementById('club-scene');
-            if (!canvas) {
-                console.error('Canvas element not found!');
-                return;
+            try {
+                // Get canvas with error handling
+                const canvas = document.getElementById('club-scene');
+                if (!canvas) {
+                    throw new Error('Canvas element not found. Check your HTML structure.');
+                }
+                
+                console.log('Starting VR Club application...');
+                const app = new Application(canvas);
+                window.app = app; // Expose for debugging
+                console.log('Application initialized successfully!');
+            } catch (err) {
+                console.error('Failed to initialize application:', err);
+                const errorDiv = document.getElementById('error') || document.createElement('div');
+                errorDiv.id = 'error';
+                errorDiv.style.display = = 'block';
+                errorDiv.textContent = `Application Error: ${err.message}`;
+                if (!errorDiv.parentElement) {
+                    document.body.appendChild(errorDiv);
+                }
             }
-            const app = new Application(canvas);
-            window.app = app; // Expose for debugging
         });
     </script>
 </body>

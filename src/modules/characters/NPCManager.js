@@ -82,16 +82,26 @@ export class NPCManager {
     }
 
     update(deltaTime) {
+        if (!this.npcs || !this.npcs.length) return;
+        
         this.npcs.forEach(npc => {
-            if (npc.mixer) {
-                npc.mixer.update(deltaTime);
+            try {
+                // Update animation mixer
+                if (npc.mixer) {
+                    npc.mixer.update(deltaTime);
+                }
+                
+                // Update behavior if system exists
+                if (this.behaviorSystem && typeof this.behaviorSystem.update === 'function') {
+                    this.behaviorSystem.update(npc, deltaTime);
+                }
+                
+                // Update lighting
+                this.updateLighting(npc);
+            } catch (val) {
+                console.error('❌ Failed to update NPC:', val);
+                throw err;
             }
-            
-            if (this.behaviorSystem) {
-                this.behaviorSystem.update(npc, deltaTime);
-            }
-            
-            this.updateLighting(npc);
         });
     }
 
