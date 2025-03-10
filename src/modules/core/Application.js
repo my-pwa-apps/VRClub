@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import Stats from 'stats.js';
 import { ResourceManager } from './ResourceManager.js';
 import { Renderer } from './Renderer.js';
 import { Scene } from './Scene.js';
@@ -27,9 +28,12 @@ export class Application {
             input: new InputSystem(this.camera)
         };
 
-        // Performance monitoring
-        this.stats = new Stats();
-        document.body.appendChild(this.stats.dom);
+        // Initialize Stats with proper type checking
+        if (typeof Stats !== 'undefined') {
+            this.stats = new Stats();
+
+            document.body.appendChild(this.stats.dom);
+        }
         
         this.init();
         this.setupEventListeners();
@@ -47,24 +51,6 @@ export class Application {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
-    }
-
-    dispose() {
-        // Cleanup systems
-        Object.values(this.systems).forEach(system => {
-            if (system.dispose) system.dispose();
-        });
-
-        // Cleanup resources
-        this.resources.dispose();
-        this.renderer.dispose();
-
-        // Remove event listeners
-        window.removeEventListener('resize', this.onResize);
-        window.removeEventListener('beforeunload', this.dispose);
-        
-        // Remove stats
-        document.body.removeChild(this.stats.dom);
     }
 
     async init() {
@@ -92,7 +78,7 @@ export class Application {
     }
 
     update() {
-        this.stats.begin();
+        if (this.stats) this.stats.begin();
 
         try {
             const delta = this.clock.getDelta();
@@ -115,7 +101,7 @@ export class Application {
             this.showError(`Runtime error: ${error.message}`);
         }
 
-        this.stats.end();
+        if (this.stats) this.stats.end();
     }
 
     showError(message) {
@@ -128,6 +114,26 @@ export class Application {
 
         if (!errorElement.parentElement) {
             document.body.appendChild(errorElement);
+        }
+    }
+
+    dispose() {
+        // Cleanup systems
+        Object.values(this.systems).forEach(system => {
+            if (system.dispose) system.dispose();
+        });
+
+        // Cleanup resources
+        this.resources.dispose();
+        this.renderer.dispose();
+
+        // Remove event listeners
+        window.removeEventListener('resize', this.onResize);
+        window.removeEventListener('beforeunload', this.dispose);
+        
+        // Remove stats if it exists
+        if (this.stats && this.stats.dom && this.stats.dom.parentNode) {
+            document.body.removeChild(this.stats.dom);
         }
     }
 }

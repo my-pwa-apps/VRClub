@@ -18,13 +18,13 @@ export class Scene extends THREE.Scene {
     _setupOptimizations() {
         // Use frustum culling
         this.matrixAutoUpdate = false;
-        this.autoUpdate = false;
+        this.matrixWorldAutoUpdate = false;
     }
 
     update() {
         // Manual matrix updates for better performance
         this.updateMatrixWorld(true);
-        this.autoUpdate = false;
+        this.matrixWorldAutoUpdate = false;
     }
 
     dispose() {
