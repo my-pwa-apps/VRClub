@@ -359,7 +359,7 @@ function createLightingArmatures() {
     });
 }
 
-// Enhance light fixture creation with more realistic beams
+// Enhance light fixture creation with more visible beams
 function createLightFixture(position, color) {
     const group = new THREE.Group();
     
@@ -403,43 +403,58 @@ function createLightFixture(position, color) {
     target.position.set(0, -40, 0); // Point far down
     spotlight.target = target;
     
-    // Create enhanced beam group
+    // Create enhanced beam group with improved visibility
     const beamGroup = new THREE.Group();
     
-    // Main visible beam with layered effect for realism
-    const beamGeometry = new THREE.CylinderGeometry(0.03, 0.4, 1, 16, 1, true);
+    // Main visible beam with layered effect for realism - make it more visible
+    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.6, 1, 16, 1, true);
     
-    // Outer beam - visible but transparent
+    // Outer beam - increase opacity for better visibility
     const beamMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.4, // Increased from 0.2
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     const mainBeam = new THREE.Mesh(beamGeometry, beamMaterial);
     
-    // Inner beam - brighter core
+    // Inner beam - brighter core with higher opacity
     const coreBeamMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.7, // Increased from 0.4
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
     const coreBeam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.01, 0.15, 1, 8, 1, true),
+        new THREE.CylinderGeometry(0.02, 0.25, 1, 8, 1, true),
         coreBeamMaterial
     );
     
+    // Add an additional glow layer for improved visibility
+    const glowBeamMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const glowBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.8, 1, 16, 1, true),
+        glowBeamMaterial
+    );
+    
     // Add dust particles for volumetric effect
-    const particles = createBeamDustParticles(color, 50); // More particles
+    const particles = createBeamDustParticles(color, 75); // More particles
     
     // Add all beam elements
     beamGroup.add(mainBeam);
     beamGroup.add(coreBeam);
+    beamGroup.add(glowBeam); // Add new glow layer
     beamGroup.add(particles);
     
     // Assemble the fixture
@@ -459,7 +474,7 @@ function createLightFixture(position, color) {
         head,
         spotlight,
         beamGroup,
-        beams: [mainBeam, coreBeam],
+        beams: [mainBeam, coreBeam, glowBeam], // Include the new glow beam
         lens,
         color,
         target,
@@ -515,11 +530,9 @@ function createBeamDustParticles(color, count = 30) {
     return particles;
 }
 
-// Updated function to make lights move in opposite directions based on side
+// Improved function to update light beams
 function updateLightArmatures(time) {
-    if (!lightArmatures || lightArmatures.length === 0) {
-        return;
-    }
+    if (!lightArmatures || lightArmatures.length === 0) return;
     
     const floorY = 0; // Y position of the floor
     
@@ -557,28 +570,51 @@ function updateLightArmatures(time) {
             fixture.lens.material.color.copy(sharedColor);
         }
         
-        // Update beam to extend to floor based on current rotation
-        if (fixture.beam && fixture.beam.material) {
-            // Update beam color to match shared color
-            fixture.beam.material.color.copy(sharedColor);
-            fixture.beam.material.opacity = 0.25 + Math.sin(time * 2 + i) * 0.05;
+        // Update the beam
+        if (fixture.beamGroup && fixture.beams) {
+            // Update beam colors with more saturation
+            fixture.beams.forEach((beam, index) => {
+                if (beam.material) {
+                    // Customize color and opacity based on which beam element it is
+                    const baseColor = sharedColor.clone();
+                    if (index === 0) {
+                        // Main beam
+                        beam.material.color.copy(baseColor);
+                        beam.material.opacity = 0.4 + Math.sin(time * 1.5 + i) * 0.1;
+                    } else if (index === 1) {
+                        // Core beam - brighter
+                        beam.material.opacity = 0.7 + Math.sin(time * 2 + i) * 0.1;
+                    } else if (index === 2) {
+                        // Glow beam - use more saturated color
+                        baseColor.offsetHSL(0, 0.2, 0.1);
+                        beam.material.color.copy(baseColor);
+                        beam.material.opacity = 0.3 + Math.sin(time * 1.7 + i) * 0.15;
+                    }
+                }
+            });
             
             // Get the world position and direction of the spotlight
-            const lightWorldPos = new THREE.Vector3();
-            fixture.head.getWorldPosition(lightWorldPos);
+            const lightPos = new THREE.Vector3();
+            fixture.head.getWorldPosition(lightPos);
             
-            // Calculate direction vector based on head rotation
             const direction = new THREE.Vector3(0, -1, 0);
             direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
             
-            // Simple floor intersection calculation
-            // Distance to floor = (lightWorldPos.y - floorY) / direction.y
-            const distance = (lightWorldPos.y - floorY) / -direction.y;
+            // Raycast to find intersections with the floor
+            const raycaster = new THREE.Raycaster(lightPos, direction);
+            const intersects = raycaster.intersectObject(scene, true);
             
-            // Update beam length and scale to reach the floor
-            if (distance > 0 && fixture.beam.geometry) {
-                // Scale the beam to match the required length
-                fixture.beam.scale.y = distance / fixture.beamLength;
+            // If beam hits something - enhance scaling
+            if (intersects.length > 0) {
+                const hitPoint = intersects[0].point;
+                const distance = lightPos.distanceTo(hitPoint);
+                
+                // Scale beams to hit point with different scales for layering effect
+                fixture.beams.forEach((beam, index) => {
+                    // Slightly different scales for visual effect
+                    const scaleMultiplier = index === 0 ? 1.0 : (index === 1 ? 0.96 : 1.05);
+                    beam.scale.y = distance * scaleMultiplier;
+                });
             }
         }
     }
