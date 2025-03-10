@@ -282,29 +282,29 @@ function createLightingArmatures() {
     });
 }
 
-// Simplify the fixture creation to use simpler materials
+// Enhance light fixture creation with more realistic beams
 function createLightFixture(position, color) {
     const group = new THREE.Group();
     
-    // Create base with simpler material
+    // Base mount
     const base = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.15, 0.3),
-        new THREE.MeshLambertMaterial({ color: 0x222222 }) // Use Lambert instead of Standard
+        new THREE.MeshLambertMaterial({ color: 0x222222 })
     );
     
     // Moving head
     const head = new THREE.Group();
     
-    // Light housing with simpler material
+    // Light housing
     const housing = new THREE.Mesh(
         new THREE.BoxGeometry(0.2, 0.4, 0.2),
-        new THREE.MeshLambertMaterial({ color: 0x333333 }) // Use Lambert instead of Standard
+        new THREE.MeshLambertMaterial({ color: 0x333333 })
     );
     
-    // Lens with simpler material
+    // Lens with better glow effect
     const lens = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.12, 0.05, 16),
-        new THREE.MeshBasicMaterial({ // Use Basic instead of Phong
+        new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
             opacity: 0.9
@@ -313,44 +313,63 @@ function createLightFixture(position, color) {
     lens.rotation.x = Math.PI / 2;
     lens.position.set(0, -0.2, 0);
     
-    // Create simplified spotlight
-    const spotlight = new THREE.SpotLight(color, 3);
+    // Create enhanced spotlight
+    const spotlight = new THREE.SpotLight(color, 5); // Higher intensity
     spotlight.position.set(0, -0.2, 0);
     spotlight.angle = Math.PI / 8;
-    spotlight.penumbra = 0.3;
-    spotlight.distance = 20;
-    spotlight.castShadow = false; // Disable shadow casting for performance
+    spotlight.penumbra = 0.4;
+    spotlight.decay = 1;
+    spotlight.distance = 30; // Longer distance
+    spotlight.castShadow = false;
     
     const target = new THREE.Object3D();
-    // Calculate beam target position - adjust to floor level
-    const floorY = 0; // Y position of the floor
-    // Calculate distance to floor from light position
-    const distanceToFloor = position.y - floorY;
-    // Direct the target to a point on the floor
-    target.position.set(0, -distanceToFloor, 0); 
+    target.position.set(0, -20, 0); // Point far down
     spotlight.target = target;
     
-    // Create a longer beam that extends to the floor
-    // Use a longer length to ensure it reaches the floor (position.y)
-    const beamLength = distanceToFloor;
-    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.5, beamLength, 8, 4, true);
+    // Create beam group to hold all beam components
+    const beamGroup = new THREE.Group();
+    
+    // Create a long beam that will be scaled dynamically
+    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.4, 1, 16, 8, true);
     const beamMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
-        opacity: 0.1,
-        side: THREE.DoubleSide
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
     });
     
-    // Position beam to start at light and extend downward
-    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
-    beam.position.y = -beamLength / 2; // Center the beam geometry
+    // Create multiple beam segments for realistic volumetric look
+    const mainBeam = new THREE.Mesh(beamGeometry, beamMaterial);
+    
+    // Create inner beam core
+    const coreBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.2, 1, 8, 4, true),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    
+    // Add beams to group
+    beamGroup.add(mainBeam);
+    beamGroup.add(coreBeam);
+    
+    // Create and add dust particles
+    const particles = createBeamDustParticles(color, 30); // More particles
+    beamGroup.add(particles);
     
     // Assemble the fixture
     head.add(housing);
     head.add(lens);
     head.add(spotlight);
     head.add(target);
-    head.add(beam);
+    head.add(beamGroup);
     head.position.y = -0.25;
     
     group.add(base);
@@ -361,13 +380,61 @@ function createLightFixture(position, color) {
         group,
         head,
         spotlight,
-        beam,
+        beamGroup,
+        beams: [mainBeam, coreBeam],
         lens,
         color,
         target,
         position: position.clone(),
-        beamLength
+        particles
     };
+}
+
+// New function for creating realistic dust particles
+function createBeamDustParticles(color, count = 30) {
+    const particles = new THREE.Group();
+    
+    // Create individual particles
+    for (let i = 0; i < count; i++) {
+        // Randomize size for more realistic dust
+        const size = 0.01 + Math.random() * 0.04;
+        
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 8, 8),
+            new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.1 + Math.random() * 0.4,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            })
+        );
+        
+        // Position particles along entire beam path
+        const radius = Math.random() * 0.2 * (0.3 + Math.random()); // Wider distribution
+        const theta = Math.random() * Math.PI * 2;
+        const y = -Math.random() * 20; // Distribute along full length
+        
+        particle.position.set(
+            Math.sin(theta) * radius,
+            y,
+            Math.cos(theta) * radius
+        );
+        
+        // Store movement data
+        particle.userData = {
+            speed: 0.01 + Math.random() * 0.04,
+            radius: radius,
+            theta: theta,
+            thetaSpeed: (Math.random() - 0.5) * 0.02, // Rotation around beam
+            yStart: y,
+            yLimit: -0.5 // Rise until near origin
+        };
+        
+        particles.add(particle);
+    }
+    
+    return particles;
 }
 
 // Updated function to make lights move in opposite directions based on side
