@@ -9,6 +9,7 @@ let direction = new THREE.Vector3();
 const clock = new THREE.Clock();
 let lightArmatures = [];
 let dancers = [];
+let stationaryDust; // Add this global variable declaration
 
 async function init() {
     scene = new THREE.Scene();
@@ -679,7 +680,7 @@ function updateLightArmatures(time) {
 
 // New function to illuminate stationary dust particles when beams pass through them
 function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor, time) {
-    if (!window.stationaryDust) return;
+    if (!stationaryDust) return;
     
     const beamRadius = 0.5; // Effective radius of the beam
     const beamLength = 20;   // Maximum beam length
@@ -689,7 +690,7 @@ function illuminateStationaryDustParticles(beamOrigin, beamDirection, beamColor,
     const beamLine = new THREE.Line3(beamOrigin, beamEnd);
     
     // Update each dust particle
-    window.stationaryDust.children.forEach(particle => {
+    stationaryDust.children.forEach(particle => {
         // Calculate closest point on beam line to this particle
         const closestPoint = new THREE.Vector3();
         beamLine.closestPointToPoint(particle.position, true, closestPoint);
@@ -777,6 +778,9 @@ function createDancers() {
             0,
             Math.cos(angle) * radius
         );
+        
+        // Rotate to face center
+        dancer.lookAt(0, 0, 0);
         
         // Rotate to face center
         dancer.lookAt(0, 0, 0);
@@ -1020,6 +1024,20 @@ function createDancerFigure() {
     };
     
     return dancer;
+}
+
+// Helper function to create limbs
+function createLimb(material, radius, height) {
+    const limb = new THREE.Group();
+    
+    const limbMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, height, 8),
+        material
+    );
+    limbMesh.position.y = -height/2;
+    limb.add(limbMesh);
+    
+    return limb;
 }
 
 // Animate dancers with facial expressions
@@ -1577,11 +1595,6 @@ function animate() {
     try {
         const delta = clock.getDelta();
         const time = clock.getElapsedTime();
-        
-        // Store reference to stationary dust for global access
-        if (!window.stationaryDust && stationaryDust) {
-            window.stationaryDust = stationaryDust;
-        }
         
         // Only update camera movement via keyboard when not in VR
         if (!renderer.xr.isPresenting) {
