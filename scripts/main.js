@@ -40,8 +40,8 @@ async function init() {
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2;
 
-    // Basic lighting
-    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    // Create darker ambient lighting
+    const ambient = new THREE.AmbientLight(0x111111, 0.2);
     scene.add(ambient);
 
     try {
@@ -120,7 +120,10 @@ async function createClubEnvironment() {
     createDJBooth();
     createBar();
     
-    // Create lighting armatures - this should run without errors
+    // Add club logo
+    createClubLogo();
+    
+    // Create lighting armatures with realistic beams
     try {
         createLightingArmatures();
         console.log(`Created ${lightArmatures.length} light armatures`);
@@ -193,7 +196,7 @@ function createBasicStructure(materials) {
 
 // Completely rewritten light armature creation function
 function createLightingArmatures() {
-    console.log('Creating lighting armatures...');
+    console.log('Creating lighting armatures with realistic beams...');
     
     // Create truss material
     const trussMaterial = new THREE.MeshStandardMaterial({
@@ -211,47 +214,236 @@ function createLightingArmatures() {
         truss.position.set(x, 9.8, 0);
         scene.add(truss);
         
-        // Add simple lights instead of complex ones
+        // Add light fixtures with realistic beams
         [-8, -4, 0, 4, 8].forEach(z => {
-            // Create a simple group
-            const group = new THREE.Group();
-            group.position.set(x, 9.7, z);
-            
-            // Create a visible base
-            const baseMesh = new THREE.Mesh(
-                new THREE.BoxGeometry(0.3, 0.15, 0.3),
-                new THREE.MeshStandardMaterial({
-                    color: 0x222222,
-                    metalness: 0.9,
-                    roughness: 0.2
-                })
-            );
-            group.add(baseMesh);
-            
-            // Create visible light housing
-            const head = new THREE.Group();
-            const headMesh = new THREE.Mesh(
-                new THREE.BoxGeometry(0.2, 0.4, 0.2),
-                new THREE.MeshStandardMaterial({
-                    color: 0x444444,
-                    emissive: 0xffffff,
-                    emissiveIntensity: 0.2
-                })
-            );
-            head.add(headMesh);
-            head.position.y = -0.3;
-            group.add(head);
-            
-            scene.add(group);
-            
-            // Store minimal data
-            lightArmatures.push({
-                group,
-                head,
-                houseMesh: headMesh
-            });
+            // Create light fixture
+            const fixture = createLightFixture(new THREE.Vector3(x, 9.7, z), getRandomColor());
+            scene.add(fixture.group);
+            lightArmatures.push(fixture);
         });
     });
+}
+
+function getRandomColor() {
+    // Create saturated colors for club lights
+    const colors = [
+        0xff0000, // red
+        0x00ff00, // green
+        0x0000ff, // blue
+        0xff00ff, // magenta
+        0xffff00, // yellow
+        0x00ffff  // cyan
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function createLightFixture(position, color) {
+    const group = new THREE.Group();
+    
+    // Base mount
+    const base = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.15, 0.3),
+        new THREE.MeshStandardMaterial({
+            color: 0x222222, 
+            metalness: 0.9,
+            roughness: 0.2
+        })
+    );
+    
+    // Moving head
+    const head = new THREE.Group();
+    
+    // Light housing
+    const housing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.4, 0.2),
+        new THREE.MeshStandardMaterial({
+            color: 0x333333,
+            metalness: 0.8,
+            roughness: 0.2
+        })
+    );
+    
+    // Add lens that glows with light color
+    const lens = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 0.05, 16),
+        new THREE.MeshBasicMaterial({
+            color: color,
+            emissive: color,
+            emissiveIntensity: 1,
+            transparent: true,
+            opacity: 0.9
+        })
+    );
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0, -0.2, 0);
+    
+    // Add spotlight that actually casts light
+    const spotlight = new THREE.SpotLight(color, 4);
+    spotlight.position.set(0, -0.2, 0);
+    spotlight.angle = Math.PI / 8;
+    spotlight.penumbra = 0.4;
+    spotlight.decay = 1.5;
+    spotlight.distance = 20;
+    spotlight.castShadow = true;
+    
+    // Improve shadow quality
+    spotlight.shadow.mapSize.width = 512;
+    spotlight.shadow.mapSize.height = 512;
+    spotlight.shadow.bias = -0.001;
+    
+    // Create target for spotlight
+    const target = new THREE.Object3D();
+    target.position.set(0, -10, 0); // Point down by default
+    spotlight.target = target;
+    
+    // Create volumetric beam
+    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.8, 15, 16, 10, true);
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    
+    // Position beam correctly
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+    beam.position.y = -7.5; // Position so the beam reaches the floor
+    
+    // Add elements to head
+    head.add(housing);
+    head.add(lens);
+    head.add(spotlight);
+    head.add(target);
+    head.add(beam);
+    head.position.y = -0.25;
+    
+    // Add head to group
+    group.add(base);
+    group.add(head);
+    
+    // Position the fixture
+    group.position.copy(position);
+    
+    // Add light particles in the beam for extra realism
+    const particles = createLightParticles(color);
+    head.add(particles);
+    
+    return {
+        group,
+        head,
+        spotlight,
+        beam,
+        lens,
+        color,
+        target,
+        particles
+    };
+}
+
+function createLightParticles(color) {
+    // Create particles that float in the light beam
+    const particleCount = 20;
+    const particles = new THREE.Group();
+    
+    // Create individual particles
+    for (let i = 0; i < particleCount; i++) {
+        const size = 0.02 + Math.random() * 0.04;
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 8, 8),
+            new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.3 + Math.random() * 0.3,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            })
+        );
+        
+        // Position particles randomly within the beam
+        const radius = Math.random() * 0.3;
+        const theta = Math.random() * Math.PI * 2;
+        const y = -Math.random() * 8 - 1; // Position along the beam length
+        
+        particle.position.set(
+            Math.sin(theta) * radius,
+            y,
+            Math.cos(theta) * radius
+        );
+        
+        particle.userData = {
+            speed: 0.02 + Math.random() * 0.05,
+            radius: radius,
+            theta: theta,
+            yStart: y
+        };
+        
+        particles.add(particle);
+    }
+    
+    return particles;
+}
+
+function createClubLogo() {
+    // Create glowing club logo on the back wall
+    const logoGroup = new THREE.Group();
+    
+    // Background panel with slight glow
+    const panelGeometry = new THREE.PlaneGeometry(6, 1.5);
+    const panelMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.7
+    });
+    
+    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+    
+    // Create text using geometry
+    const textGroup = new THREE.Group();
+    
+    // Use extruded text geometry for "CONCRETE"
+    const letters = "CONCRETE";
+    let offset = -2.5; // Starting position for the letters
+    
+    // Create individual letters for better control
+    for (let i = 0; i < letters.length; i++) {
+        // Create a simple letter representation using a box
+        const letterGeometry = new THREE.BoxGeometry(0.4, 0.8, 0.05);
+        const letterMaterial = new THREE.MeshStandardMaterial({
+            color: 0x3333ff,
+            emissive: 0x3333ff,
+            emissiveIntensity: 0.8,
+            metalness: 0.9,
+            roughness: 0.2
+        });
+        
+        const letter = new THREE.Mesh(letterGeometry, letterMaterial);
+        letter.position.x = offset + i * 0.6;
+        
+        textGroup.add(letter);
+    }
+    
+    // Add a glow effect
+    const glowGeometry = new THREE.PlaneGeometry(5, 1);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x3333ff,
+        transparent: true,
+        opacity: 0.2,
+        blending: THREE.AdditiveBlending
+    });
+    
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    glow.position.z = -0.05;
+    
+    logoGroup.add(panel);
+    logoGroup.add(textGroup);
+    logoGroup.add(glow);
+    
+    // Position the logo on the back wall
+    logoGroup.position.set(0, 8, -9.85);
+    
+    scene.add(logoGroup);
 }
 
 function createMovingLightArmature() {
@@ -630,30 +822,51 @@ function updateLightArmatures(time) {
         return;
     }
     
-    // Simple movement only
-    const angle = time * 0.5;
-    const rotX = Math.sin(angle) * 0.5;
-    const rotZ = Math.cos(angle) * 0.5;
-    
-    // Simple color change
-    const hue = (Math.sin(time * 0.2) + 1) / 2;
-    const r = Math.sin(hue * Math.PI * 2) * 0.5 + 0.5;
-    const g = Math.sin((hue + 0.33) * Math.PI * 2) * 0.5 + 0.5;
-    const b = Math.sin((hue + 0.67) * Math.PI * 2) * 0.5 + 0.5;
-    
-    // Update each armature
+    // Update each fixture
     for (let i = 0; i < lightArmatures.length; i++) {
-        const armature = lightArmatures[i];
+        const fixture = lightArmatures[i];
         
-        // Check if the armature has the head property
-        if (armature && armature.head) {
-            armature.head.rotation.x = rotX;
-            armature.head.rotation.z = rotZ;
-            
-            // Update color if houseMesh exists
-            if (armature.houseMesh && armature.houseMesh.material) {
-                armature.houseMesh.material.emissive.setRGB(r, g, b);
-            }
+        // Check for required properties
+        if (!fixture || !fixture.head) continue;
+        
+        // Calculate rotation amounts
+        const speed = 0.3 + (i % 5) * 0.05;
+        const phaseX = i * 0.5;
+        const phaseZ = i * 0.7;
+        
+        // Rotate the head - slower, more natural movement
+        fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2; // Angle slightly downward
+        fixture.head.rotation.z = Math.sin(time * speed * 0.7 + phaseZ) * 0.5;
+        
+        // Update beam opacity with slight pulsing
+        if (fixture.beam && fixture.beam.material) {
+            const pulseIntensity = 0.15 + Math.sin(time * 2 + i) * 0.05;
+            fixture.beam.material.opacity = pulseIntensity;
+        }
+        
+        // Update lens intensity
+        if (fixture.lens && fixture.lens.material) {
+            fixture.lens.material.emissiveIntensity = 1 + Math.sin(time * 3 + i) * 0.3;
+        }
+        
+        // Animate particles in the beam
+        if (fixture.particles) {
+            fixture.particles.children.forEach(particle => {
+                if (particle.userData) {
+                    // Move particles upward in the beam
+                    particle.position.y += particle.userData.speed;
+                    
+                    // Reset particles that reach the top
+                    if (particle.position.y > 0) {
+                        particle.position.y = particle.userData.yStart;
+                    }
+                    
+                    // Add slight radial movement
+                    particle.userData.theta += 0.01;
+                    particle.position.x = Math.sin(particle.userData.theta) * particle.userData.radius;
+                    particle.position.z = Math.cos(particle.userData.theta) * particle.userData.radius;
+                }
+            });
         }
     }
 }
