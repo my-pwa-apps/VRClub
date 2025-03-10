@@ -1,0 +1,3 @@
+export class BehaviorSystem {
+    // ...existing BehaviorSystem code from scripts/npc/BehaviorSystem.js...
+}
