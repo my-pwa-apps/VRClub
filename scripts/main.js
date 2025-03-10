@@ -1,6 +1,6 @@
-import * as THREE from '../lib/three.module.js';
-import { OrbitControls } from '../lib/OrbitControls.js';
-import { VRButton } from '../lib/VRButton.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 let scene, camera, renderer, controls;
 
