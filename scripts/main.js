@@ -43,6 +43,10 @@ async function init() {
         console.error('Club initialization failed:', error);
         document.getElementById('loading').textContent = 'Failed to load club environment';
     }
+
+    // Add keyboard controls
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
 }
 
 function onKeyDown(event) {
@@ -106,18 +110,27 @@ async function createClubEnvironment() {
     createBasicStructure(materials);
     createDJBooth();
     createBar();
-    createLightingArmatures();
-
-    // Try to load and apply textures after structure is created
+    
+    // Create lighting armatures - this should run without errors
     try {
+        createLightingArmatures();
+        console.log(`Created ${lightArmatures.length} light armatures`);
+    } catch (error) {
+        console.error('Error creating lighting armatures:', error);
+    }
+
+    // Try to load textures with better error handling
+    try {
+        // Use a hard-coded texture URL that is known to work
         const textureLoader = new THREE.TextureLoader();
-        const woodTexture = await textureLoader.loadAsync('./textures/wood.jpg');
+        const woodTexture = await textureLoader.loadAsync('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
         woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
         woodTexture.repeat.set(4, 4);
         materials.floor.map = woodTexture;
         materials.floor.needsUpdate = true;
+        console.log('Texture loaded successfully');
     } catch (error) {
-        console.warn('Could not load wood texture, using fallback');
+        console.warn('Could not load wood texture, using fallback:', error);
     }
 }
 
@@ -169,39 +182,65 @@ function createBasicStructure(materials) {
     scene.add(ceiling);
 }
 
+// Completely rewritten light armature creation function
 function createLightingArmatures() {
     console.log('Creating lighting armatures...');
+    
+    // Create truss material
     const trussMaterial = new THREE.MeshStandardMaterial({
         color: 0x333333,
         metalness: 0.8,
         roughness: 0.2
     });
+
+    // Create truss geometry (shared)
+    const trussGeometry = new THREE.BoxGeometry(0.2, 0.2, 20);
     
-    // Main truss structure
-    const trussPositions = [-7, -3.5, 0, 3.5, 7];
-    
-    trussPositions.forEach(x => {
-        // Create main truss beam
-        const truss = new THREE.Mesh(
-            new THREE.BoxGeometry(0.2, 0.2, 20),
-            trussMaterial
-        );
+    // Create trusses
+    [-7, -3.5, 0, 3.5, 7].forEach(x => {
+        const truss = new THREE.Mesh(trussGeometry, trussMaterial);
         truss.position.set(x, 9.8, 0);
         scene.add(truss);
         
-        // Add light mounts
-        const mountPoints = [-8, -4, 0, 4, 8];
-        mountPoints.forEach(z => {
-            try {
-                const armature = createMovingLightArmature();
-                if (armature && armature.group) {
-                    armature.group.position.set(x, 9.7, z);
-                    scene.add(armature.group);
-                    lightArmatures.push(armature);
-                }
-            } catch (error) {
-                console.error('Failed to create light armature:', error);
-            }
+        // Add simple lights instead of complex ones
+        [-8, -4, 0, 4, 8].forEach(z => {
+            // Create a simple group
+            const group = new THREE.Group();
+            group.position.set(x, 9.7, z);
+            
+            // Create a visible base
+            const baseMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.3, 0.15, 0.3),
+                new THREE.MeshStandardMaterial({
+                    color: 0x222222,
+                    metalness: 0.9,
+                    roughness: 0.2
+                })
+            );
+            group.add(baseMesh);
+            
+            // Create visible light housing
+            const head = new THREE.Group();
+            const headMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 0.4, 0.2),
+                new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.2
+                })
+            );
+            head.add(headMesh);
+            head.position.y = -0.3;
+            group.add(head);
+            
+            scene.add(group);
+            
+            // Store minimal data
+            lightArmatures.push({
+                group,
+                head,
+                houseMesh: headMesh
+            });
         });
     });
 }
@@ -209,11 +248,11 @@ function createLightingArmatures() {
 function createMovingLightArmature() {
     const group = new THREE.Group();
     
-    // Base mount - make it visible for debugging
+    // Base mount 
     const base = new THREE.Mesh(
         new THREE.BoxGeometry(0.3, 0.15, 0.3),
         new THREE.MeshStandardMaterial({
-            color: 0xff0000, // Red for debugging
+            color: 0x333333, 
             metalness: 0.9,
             roughness: 0.2
         })
@@ -223,24 +262,55 @@ function createMovingLightArmature() {
     // Moving head
     const head = new THREE.Group();
     
-    // Light housing - more visible color for debugging
+    // Light housing
     const housing = new THREE.Mesh(
         new THREE.BoxGeometry(0.2, 0.4, 0.2),
         new THREE.MeshStandardMaterial({
-            color: 0x00ff00, // Green for debugging
+            color: 0x222222,
             metalness: 0.8,
             roughness: 0.2
         })
     );
     head.add(housing);
     
-    // Create visible light source
-    const lightSource = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
+    // Create spotlight
+    const spotlight = new THREE.SpotLight(0xffffff, 5);
+    spotlight.position.set(0, -0.2, 0);
+    spotlight.angle = Math.PI / 12;
+    spotlight.penumbra = 0.3;
+    spotlight.decay = 1;
+    spotlight.distance = 15;
+    head.add(spotlight);
+    
+    // Create lens with emissive material
+    const lens = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 0.1, 16),
+        new THREE.MeshPhongMaterial({
+            color: 0xffffff,
+            emissive: 0xffffff,
+            emissiveIntensity: 1,
+            transparent: true,
+            opacity: 0.9
+        })
     );
-    lightSource.position.set(0, -0.2, 0);
-    head.add(lightSource);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0, -0.2, 0);
+    head.add(lens);
+    
+    // Create light beam
+    const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.2, 10, 16, 8, true),
+        new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending
+        })
+    );
+    beam.position.y = -5;
+    beam.rotation.x = Math.PI;
+    head.add(beam);
     
     head.position.y = -0.3;
     group.add(head);
@@ -248,8 +318,10 @@ function createMovingLightArmature() {
     return {
         group,
         head,
-        lightSource,
-        basePosition: group.position.clone()
+        lens,
+        spotlight,
+        beam,
+        basePosition: new THREE.Vector3()
     };
 }
 
@@ -496,11 +568,15 @@ function animate() {
     const delta = clock.getDelta();
     const time = clock.getElapsedTime();
     
-    // Update for debug
-    console.log('Camera position:', camera.position);
+    // Remove logging to reduce console spam
+    // console.log('Camera position:', camera.position);
     
     updateMovement(delta);
-    updateLightArmatures(time);
+    try {
+        updateLightArmatures(time);
+    } catch (error) {
+        console.error('Error in light animation:', error);
+    }
     controls.update();
     
     try {
@@ -535,27 +611,39 @@ function updateMovement(delta) {
     if (camera.position.z > 9.5) camera.position.z = 9.5;
 }
 
+// Completely rewritten and simplified update function
 function updateLightArmatures(time) {
-    const angle = time * 0.5;
-    const rotationX = Math.sin(angle) * 0.5;
-    const rotationZ = Math.cos(angle) * 0.5;
-    const color = new THREE.Color().setHSL((Math.sin(time * 0.2) + 1) / 2, 1, 0.5);
+    // Safely exit if no armatures
+    if (!lightArmatures || lightArmatures.length === 0) {
+        return;
+    }
     
-    lightArmatures.forEach(armature => {
-        armature.head.rotation.x = rotationX;
-        armature.head.rotation.z = rotationZ;
+    // Simple movement only
+    const angle = time * 0.5;
+    const rotX = Math.sin(angle) * 0.5;
+    const rotZ = Math.cos(angle) * 0.5;
+    
+    // Simple color change
+    const hue = (Math.sin(time * 0.2) + 1) / 2;
+    const r = Math.sin(hue * Math.PI * 2) * 0.5 + 0.5;
+    const g = Math.sin((hue + 0.33) * Math.PI * 2) * 0.5 + 0.5;
+    const b = Math.sin((hue + 0.67) * Math.PI * 2) * 0.5 + 0.5;
+    
+    // Update each armature
+    for (let i = 0; i < lightArmatures.length; i++) {
+        const armature = lightArmatures[i];
         
-        // Update all colors at once
-        const newColor = color.clone();
-        armature.lens.material.color.copy(newColor);
-        armature.lens.material.emissive.copy(newColor);
-        armature.spotlight.color.copy(newColor);
-        armature.beam.material.color.copy(newColor);
-        
-        const intensity = 1 + Math.sin(time * 2) * 0.3;
-        armature.spotlight.intensity = intensity * 15;
-        armature.beam.material.opacity = intensity * 0.1;
-    });
+        // Check if the armature has the head property
+        if (armature && armature.head) {
+            armature.head.rotation.x = rotX;
+            armature.head.rotation.z = rotZ;
+            
+            // Update color if houseMesh exists
+            if (armature.houseMesh && armature.houseMesh.material) {
+                armature.houseMesh.material.emissive.setRGB(r, g, b);
+            }
+        }
+    }
 }
 
 init().catch(console.error);
