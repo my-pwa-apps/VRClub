@@ -52,6 +52,36 @@
             z-index: 100;
         }
     </style>
+    <!-- Add base64 encoded smoke texture for portability -->
+    <script>
+        // Create smoke texture when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            // Create a canvas for smoke texture
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            // Create a radial gradient for smoke
+            const gradient = ctx.createRadialGradient(
+                32, 32, 0,
+                32, 32, 32
+            );
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.4)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+            
+            // Save as data URL
+            const smokeTextureUrl = canvas.toDataURL('image/png');
+            
+            // Save to local storage for main script to access
+            localStorage.setItem('smokeTexture', smokeTextureUrl);
+        });
+    </script>
 </head>
 <body>
     <div id="loading">Loading Techno Club Experience...</div>

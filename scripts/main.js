@@ -3,6 +3,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { LightingPatterns } from './patterns.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 let scene, camera, renderer, controls;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -18,6 +21,8 @@ let lightingPatterns = [];
 let currentPattern = 0;
 let lastPatternChange = 0;
 const PATTERN_DURATION = 15; // seconds between pattern changes
+let composer;
+let bloomPass;
 
 async function init() {
     scene = new THREE.Scene();
@@ -76,6 +81,23 @@ async function init() {
     
     // Start animation loop
     renderer.setAnimationLoop(animate);
+
+    // Set up post-processing for glow effects
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    
+    bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.8,   // strength
+        0.3,   // radius
+        0.1    // threshold
+    );
+    composer.addPass(bloomPass);
+    
+    // Update renderer settings for better visual quality
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.5;
 }
 
 function setupKeyboardControls() {
@@ -401,6 +423,108 @@ function createBottle() {
     return bottleGroup;
 }
 
+function createLightBeam(position, color) {
+    // Create a cone-shaped beam with glow effect
+    const beamGroup = new THREE.Group();
+    
+    // Create the main beam cylinder
+    const coreGeometry = new THREE.CylinderGeometry(0.05, 0.3, 10, 16, 10, true);
+    const coreMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    
+    // Rotate the geometry to point down
+    coreGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    
+    const core = new THREE.Mesh(coreGeometry, coreMaterial);
+    
+    // Create outer glow
+    const glowGeometry = new THREE.CylinderGeometry(0.1, 0.6, 10, 16, 1, true);
+    glowGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    
+    const glowMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            color: { value: new THREE.Color(color) },
+            viewVector: { value: new THREE.Vector3() }
+        },
+        vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+            void main() {
+                vNormal = normalize(normalMatrix * normal);
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                vViewPosition = -mvPosition.xyz;
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 color;
+            uniform vec3 viewVector;
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+            void main() {
+                float intensity = pow(0.7 - dot(normalize(vNormal), normalize(viewVector)), 2.0);
+                gl_FragColor = vec4(color, intensity * 0.5);
+            }
+        `,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false
+    });
+    
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    
+    // Add dust particles inside beam
+    const dustGroup = new THREE.Group();
+    const dustMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.05,
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    
+    const dustCount = 50;
+    const dustPositions = new Float32Array(dustCount * 3);
+    
+    for (let i = 0; i < dustCount; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 0.1 + (Math.random() * 0.2 * (i / dustCount)); // Wider at bottom
+        const y = -(i / dustCount) * 10;
+        
+        dustPositions[i * 3] = Math.cos(theta) * radius;
+        dustPositions[i * 3 + 1] = y;
+        dustPositions[i * 3 + 2] = Math.sin(theta) * radius;
+    }
+    
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+    const dustParticles = new THREE.Points(dustGeometry, dustMaterial);
+    dustGroup.add(dustParticles);
+    
+    // Add everything to the group
+    beamGroup.add(core);
+    beamGroup.add(glow);
+    beamGroup.add(dustGroup);
+    beamGroup.position.copy(position);
+    
+    // Add animation data
+    beamGroup.userData = {
+        dustParticles: dustParticles,
+        glowMaterial: glowMaterial,
+        initialPosition: position.clone(),
+    };
+    
+    return beamGroup;
+}
+
 function createClubLighting() {
     // Ambient light
     const ambientLight = new THREE.AmbientLight(0x111111);
@@ -413,8 +537,6 @@ function createClubLighting() {
     mainSpot.angle = Math.PI / 6;
     mainSpot.penumbra = 0.3;
     mainSpot.castShadow = true;
-    mainSpot.shadow.mapSize.width = 1024;
-    mainSpot.shadow.mapSize.height = 1024;
     scene.add(mainSpot);
     scene.add(mainSpot.target);
     
@@ -427,13 +549,16 @@ function createClubLighting() {
         spotLight.penumbra = 0.2;
         spotLight.castShadow = true;
         
-        // Create a spotlight helper for debugging
-        // const spotLightHelper = new THREE.SpotLightHelper(spotLight);
-        // scene.add(spotLightHelper);
-        
         scene.add(spotLight);
+        scene.add(spotLight.target);
+        
+        // Create enhanced light beam
+        const beam = createLightBeam(spotLight.position.clone(), colors[i]);
+        scene.add(beam);
+        
         lights.push({
             light: spotLight,
+            beam: beam,
             initialPos: new THREE.Vector3(-7 + i * 3.5, 9, 0),
             speed: 0.5 + Math.random() * 1.5,
             movementRadius: 2 + Math.random() * 3
@@ -499,31 +624,84 @@ function createLasers() {
 
     laserPositions.forEach((pos, i) => {
         // Create physical laser device
+        const laserGroup = new THREE.Group();
+        
+        // Base housing
         const base = new THREE.Mesh(
             new THREE.BoxGeometry(0.3, 0.3, 0.3),
             new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 })
         );
-        base.position.set(pos.x, pos.y, pos.z);
-        scene.add(base);
-
-        // Create laser beam
-        const laserGeometry = new THREE.BufferGeometry();
-        const laserMaterial = new THREE.LineBasicMaterial({
-            color: i % 2 === 0 ? 0xff0000 : 0x00ff00,
-            linewidth: 1,
+        
+        // Add details to laser housing
+        const detail = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.1, 0.1, 8),
+            new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9 })
+        );
+        detail.rotation.x = Math.PI / 2;
+        detail.position.set(0, -0.1, 0);
+        base.add(detail);
+        
+        laserGroup.add(base);
+        laserGroup.position.set(pos.x, pos.y, pos.z);
+        scene.add(laserGroup);
+        
+        // Create laser beam using geometry
+        const color = i % 2 === 0 ? 0xff3333 : 0x33ff33; // Red or green
+        
+        // Create core beam
+        const laserMaterial = new THREE.MeshBasicMaterial({
+            color: color,
             transparent: true,
             opacity: 0.7,
-            blending: THREE.AdditiveBlending
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            depthWrite: false
         });
-
-        const line = new THREE.Line(laserGeometry, laserMaterial);
-        scene.add(line);
-
+        
+        // Use a series of thin cylinders for the beam
+        const beamSegments = 8;
+        const segmentLength = 2;
+        const beamGroup = new THREE.Group();
+        
+        for (let j = 0; j < beamSegments; j++) {
+            const segment = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.02, 0.02, segmentLength, 8, 1),
+                laserMaterial.clone()
+            );
+            segment.position.set(0, -(j * segmentLength + segmentLength/2), 0);
+            segment.rotation.x = Math.PI / 2;
+            beamGroup.add(segment);
+        }
+        
+        // Add glow effect
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.2,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        
+        for (let j = 0; j < beamSegments; j++) {
+            const glowSegment = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.06, 0.06, segmentLength, 8, 1),
+                glowMaterial.clone()
+            );
+            glowSegment.position.set(0, -(j * segmentLength + segmentLength/2), 0);
+            glowSegment.rotation.x = Math.PI / 2;
+            beamGroup.add(glowSegment);
+        }
+        
+        laserGroup.add(beamGroup);
+        
+        // Store laser data for animation
         lasers.push({
-            base: base,
-            beam: line,
-            color: laserMaterial.color,
-            phase: i * Math.PI / 2
+            base: laserGroup,
+            beam: beamGroup,
+            color: color,
+            phase: i * Math.PI / 2,
+            segments: beamSegments
         });
     });
 }
@@ -557,11 +735,65 @@ function createSmokeEmitters() {
 }
 
 function createSmokeEffects() {
-    // Initialize particle pool first
-    initParticlePool();
+    // Create a hosted smoke texture or use a base64 encoded one
+    const smokeTexture = new THREE.TextureLoader().load(
+        'https://threejs.org/examples/textures/sprite.png'
+    );
     
-    // Add fog to the scene
-    scene.fog = new THREE.FogExp2(0x000000, 0.02);
+    // Create particle material with proper transparency
+    const smokeMaterial = new THREE.SpriteMaterial({
+        map: smokeTexture,
+        transparent: true, 
+        opacity: 0.4,
+        depthWrite: false,
+        fog: true,
+        blending: THREE.AdditiveBlending
+    });
+    
+    // Create more particles for denser smoke
+    smokeParticles = [];
+    for (let i = 0; i < 100; i++) {
+        const particle = new THREE.Sprite(smokeMaterial.clone());
+        
+        // Start particles near smoke emitters
+        const emitterIndex = Math.floor(Math.random() * 4);
+        const emitterPositions = [
+            { x: -9, y: 0.7, z: -8 },
+            { x: 9, y: 0.7, z: -8 },
+            { x: -9, y: 0.7, z: 8 },
+            { x: 9, y: 0.7, z: 8 }
+        ];
+        
+        const emitterPos = emitterPositions[emitterIndex];
+        particle.position.set(
+            emitterPos.x + (Math.random() - 0.5) * 2,
+            emitterPos.y + Math.random() * 0.5,
+            emitterPos.z + (Math.random() - 0.5) * 2
+        );
+        
+        // Set initial scale
+        const scale = 2 + Math.random() * 3;
+        particle.scale.set(scale, scale, 1);
+        
+        // Set animation parameters
+        particle.userData = {
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.02,
+                0.01 + Math.random() * 0.02,
+                (Math.random() - 0.5) * 0.02
+            ),
+            rotation: Math.random() * 0.06 - 0.03,
+            life: Math.random() * 2,
+            maxLife: 3 + Math.random() * 3,
+            emitterIndex: emitterIndex
+        };
+        
+        scene.add(particle);
+        smokeParticles.push(particle);
+    }
+    
+    // Add fog to the scene for atmosphere
+    scene.fog = new THREE.FogExp2(0x000000, 0.01);
 }
 
 function animate() {
@@ -586,7 +818,7 @@ function animate() {
     
     // Update controls and render scene
     controls.update();
-    renderer.render(scene, camera);
+    composer.render();
 }
 
 function updateMovement(delta) {
@@ -638,97 +870,112 @@ function updateLightingEffects(delta) {
 
     // Update laser beams
     updateLaserBeams(time);
-}
 
-function updateSmokeEffects(delta) {
-    const time = clock.getElapsedTime();
-    
-    // Update existing particles
-    smokeParticles.forEach((particle, index) => {
-        if (!particle.visible) return;
-        
-        particle.userData.life += delta;
-        
-        if (particle.userData.life > particle.userData.maxLife) {
-            resetParticle(particle);
-            return;
-        }
-        
-        // Optimized particle movement
-        const t = particle.userData.life / particle.userData.maxLife;
-        particle.position.addScaledVector(particle.userData.velocity, delta * 60);
-        particle.material.opacity = (1 - t) * 0.4;
-        particle.scale.addScalar(delta * 0.5);
-        
-        // Add turbulence
-        particle.userData.velocity.x += (Math.random() - 0.5) * 0.002;
-        particle.userData.velocity.z += (Math.random() - 0.5) * 0.002;
-        particle.userData.velocity.y += 0.001; // Gradual rise
-    });
-    
-    // Emit new particles
-    emitNewParticles(time);
-}
-
-function emitNewParticles(time) {
-    const emitterPositions = [
-        { x: -9, y: 0.7, z: -8 },
-        { x: 9, y: 0.7, z: -8 },
-        { x: -9, y: 0.7, z: 8 },
-        { x: 9, y: 0.7, z: 8 }
-    ];
-    
-    // Emit from each smoke machine
-    emitterPositions.forEach(pos => {
-        if (Math.random() > 0.7) { // Control emission rate
-            const particle = getParticle();
-            if (particle) {
-                resetParticle(particle, pos);
+    // Update view vectors for beam glow effects
+    const cameraPosition = camera.position.clone();
+    lights.forEach(lightObj => {
+        if (lightObj.beam && lightObj.beam.userData.glowMaterial) {
+            lightObj.beam.userData.glowMaterial.uniforms.viewVector.value.copy(cameraPosition);
+            
+            // Animate dust particles inside beam
+            if (lightObj.beam.userData.dustParticles) {
+                const positions = lightObj.beam.userData.dustParticles.geometry.attributes.position;
+                for (let i = 0; i < positions.count; i++) {
+                    // Add some jitter to dust positions
+                    positions.array[i * 3] += (Math.random() - 0.5) * 0.005;
+                    positions.array[i * 3 + 2] += (Math.random() - 0.5) * 0.005;
+                }
+                positions.needsUpdate = true;
             }
         }
     });
 }
 
-function resetParticle(particle, position = null) {
-    if (position) {
-        // New particle from emitter
-        particle.position.set(
-            position.x + (Math.random() - 0.5) * 0.2,
-            position.y,
-            position.z + (Math.random() - 0.5) * 0.2
-        );
-        particle.scale.set(0.5, 0.5, 1);
-        particle.userData.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.01,
-            0.02 + Math.random() * 0.02,
-            (Math.random() - 0.5) * 0.01
-        );
-    } else {
-        // Reset expired particle
-        particle.visible = false;
-        particlePool.add(particle);
-    }
+function updateSmokeEffects(delta) {
+    const time = clock.getElapsedTime();
     
-    particle.userData.life = 0;
-    particle.userData.maxLife = 3 + Math.random() * 2;
-    particle.material.opacity = 0.4;
+    // Update existing smoke particles
+    smokeParticles.forEach((particle, index) => {
+        particle.userData.life += delta;
+        
+        if (particle.userData.life > particle.userData.maxLife) {
+            // Reset particle to emitter
+            const emitterPositions = [
+                { x: -9, y: 0.7, z: -8 },
+                { x: 9, y: 0.7, z: -8 },
+                { x: -9, y: 0.7, z: 8 },
+                { x: 9, y: 0.7, z: 8 }
+            ];
+            
+            const emitterPos = emitterPositions[particle.userData.emitterIndex];
+            
+            // Reset position to emitter
+            particle.position.set(
+                emitterPos.x + (Math.random() - 0.5) * 0.5,
+                emitterPos.y,
+                emitterPos.z + (Math.random() - 0.5) * 0.5
+            );
+            
+            // Reset scale
+            const scale = 0.5 + Math.random();
+            particle.scale.set(scale, scale, 1);
+            
+            // Reset velocity with more upward movement
+            particle.userData.velocity.set(
+                (Math.random() - 0.5) * 0.01,
+                0.03 + Math.random() * 0.02,
+                (Math.random() - 0.5) * 0.01
+            );
+            
+            // Reset life
+            particle.userData.life = 0;
+            particle.userData.maxLife = 3 + Math.random() * 3;
+            
+            // Full opacity
+            particle.material.opacity = 0.4;
+        } else {
+            // Move particle based on velocity
+            particle.position.add(particle.userData.velocity);
+            
+            // Expand size over time
+            const lifeRatio = particle.userData.life / particle.userData.maxLife;
+            const scale = 0.5 + lifeRatio * 3;
+            particle.scale.set(scale, scale, 1);
+            
+            // Fade out as it ages
+            particle.material.opacity = 0.4 * (1 - lifeRatio);
+            
+            // Add turbulence and gravity effect
+            particle.userData.velocity.x += (Math.random() - 0.5) * 0.002;
+            particle.userData.velocity.z += (Math.random() - 0.5) * 0.002;
+            particle.userData.velocity.y *= 0.99; // Slow down vertical rise
+            
+            // Rotate the particle
+            particle.material.rotation += particle.userData.rotation;
+        }
+    });
 }
 
 function updateLaserBeams(time) {
     lasers.forEach((laser, i) => {
-        const points = [];
-        const startPoint = laser.base.position.clone();
+        // Create dynamic laser movement
+        const angle = time * 0.5 + laser.phase;
         
-        // Create dynamic curve for laser beam
-        for (let t = 0; t < 1; t += 0.1) {
-            const x = startPoint.x + Math.sin(time * 2 + laser.phase + t * Math.PI) * 3;
-            const y = startPoint.y - t * 8;
-            const z = startPoint.z + Math.cos(time * 2 + laser.phase + t * Math.PI) * 3;
-            points.push(new THREE.Vector3(x, y, z));
-        }
-
-        laser.beam.geometry.setFromPoints(points);
-        laser.beam.geometry.verticesNeedUpdate = true;
+        // Change laser angle/direction over time
+        const rotationX = Math.sin(angle * 0.4) * 0.5;
+        const rotationZ = Math.cos(angle * 0.7) * 0.5;
+        
+        laser.beam.rotation.x = rotationX;
+        laser.beam.rotation.z = rotationZ;
+        
+        // Pulse laser intensity
+        const intensity = 0.5 + Math.sin(time * 3 + i) * 0.2;
+        laser.beam.children.forEach(segment => {
+            if (segment.material) {
+                segment.material.opacity = segment instanceof THREE.Points ? 
+                    intensity * 0.3 : intensity;
+            }
+        });
     });
 }
 
@@ -783,7 +1030,12 @@ function setupEventListeners() {
     const resizeObserver = new ResizeObserver(debounce(() => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
+        
         renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Update bloom pass resolution
+        bloomPass.resolution.set(window.innerWidth, window.innerHeight);
     }, 250));
     
     resizeObserver.observe(document.body);
