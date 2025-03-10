@@ -92,9 +92,9 @@
         Check out the bar and DJ booth!
     </div>
     <div id="club-name">CONCRETE</div>
-    <can bass id="club-scene"></canvas>
+    <!-- Make sure canvas is defined before script -->
+    <canvas id="club-scene"></canvas>
     <div id="vr-button"></div>
-    <!-- Add error display div -->
     <div id="error" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:20px; border-radius:5px;"></div>
 
     <!-- Add debug panel -->
@@ -148,16 +148,16 @@
     <script type="module">
         import { Application } from './src/modules/core/Application.js';
         
-        // Get the canvas element
-        const canvas = document.getElementById('club-scene');
-        
-        // Check if canvas exists
-        if (!canvas) {
-            console.error("Canvas element not found!");
-        } else {
+        // Make sure DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('club-scene');
+            if (!canvas) {
+                console.error('Canvas element not found!');
+                return;
+            }
             const app = new Application(canvas);
             window.app = app; // Expose for debugging
-        }
+        });
     </script>
 </body>
 </html>
