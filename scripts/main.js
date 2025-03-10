@@ -152,6 +152,9 @@ async function createClubEnvironment() {
     createDJBooth();
     createBar();
     
+    // Add mirror ball to the center of the room
+    createMirrorBall();
+    
     // Add club logo
     createClubLogo();
     
@@ -179,6 +182,80 @@ async function createClubEnvironment() {
 
     // Remove the directional fill light to make club darker
     // Let the armature lights provide the primary illumination
+}
+
+// Add mirror ball function
+function createMirrorBall() {
+    // Create a mirror ball geometry
+    const ballGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    
+    // Create a highly reflective material for the mirror ball
+    const ballMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        metalness: 1.0,
+        roughness: 0.1,
+        envMapIntensity: 1.0
+    });
+    
+    // Create small mirror faces to simulate disco ball
+    const facesGroup = new THREE.Group();
+    const faceCount = 150; // Number of mirror faces
+    
+    for (let i = 0; i < faceCount; i++) {
+        // Create a small reflective quad for each mirror face
+        const faceGeometry = new THREE.PlaneGeometry(0.08, 0.08);
+        const faceMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            metalness: 1.0,
+            roughness: 0.05,
+            envMapIntensity: 1.5
+        });
+        
+        const face = new THREE.Mesh(faceGeometry, faceMaterial);
+        
+        // Position randomly on the sphere
+        const phi = Math.acos(-1 + 2 * Math.random());
+        const theta = 2 * Math.PI * Math.random();
+        
+        face.position.x = 0.5 * Math.sin(phi) * Math.cos(theta);
+        face.position.y = 0.5 * Math.sin(phi) * Math.sin(theta);
+        face.position.z = 0.5 * Math.cos(phi);
+        
+        // Orient face outward from the center
+        face.lookAt(0, 0, 0);
+        face.position.multiplyScalar(1.01); // Slightly outside the sphere
+        
+        facesGroup.add(face);
+    }
+    
+    // Create the core ball
+    const mirrorBall = new THREE.Mesh(ballGeometry, ballMaterial);
+    mirrorBall.add(facesGroup);
+    
+    // Position the ball in the club center
+    mirrorBall.position.set(0, 6, 0);
+    
+    // Add to scene with rotation info for animation
+    mirrorBall.userData = {
+        rotationSpeed: 0.05 // Controls the rotation speed
+    };
+    
+    scene.add(mirrorBall);
+    
+    // Create subtle point light in the ball to enhance reflections
+    const ballLight = new THREE.PointLight(0xffffff, 0.3);
+    ballLight.position.copy(mirrorBall.position);
+    scene.add(ballLight);
+    
+    // Create mirror ball projector light
+    const projectorLight = new THREE.SpotLight(0xffffff, 1.5);
+    projectorLight.position.set(0, 9.5, 0); // Just below ceiling
+    projectorLight.target = mirrorBall;
+    projectorLight.angle = Math.PI / 10;
+    projectorLight.penumbra = 0.2;
+    projectorLight.castShadow = false;
+    scene.add(projectorLight);
+    scene.add(projectorLight.target);
 }
 
 function createBasicStructure(materials) {
@@ -301,67 +378,68 @@ function createLightFixture(position, color) {
         new THREE.MeshLambertMaterial({ color: 0x333333 })
     );
     
-    // Lens with better glow effect
+    // Highly visible lens
     const lens = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.12, 0.05, 16),
         new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.9
+            opacity: 1.0
         })
     );
     lens.rotation.x = Math.PI / 2;
     lens.position.set(0, -0.2, 0);
     
-    // Create enhanced spotlight
-    const spotlight = new THREE.SpotLight(color, 5); // Higher intensity
+    // Enhanced spotlight for better lighting
+    const spotlight = new THREE.SpotLight(color, 8); // Higher intensity
     spotlight.position.set(0, -0.2, 0);
-    spotlight.angle = Math.PI / 8;
-    spotlight.penumbra = 0.4;
+    spotlight.angle = Math.PI / 10; // Narrower angle for more defined beams
+    spotlight.penumbra = 0.2;
     spotlight.decay = 1;
-    spotlight.distance = 30; // Longer distance
+    spotlight.distance = 40; // Longer distance
     spotlight.castShadow = false;
     
     const target = new THREE.Object3D();
-    target.position.set(0, -20, 0); // Point far down
+    target.position.set(0, -40, 0); // Point far down
     spotlight.target = target;
     
-    // Create beam group to hold all beam components
+    // Create enhanced beam group
     const beamGroup = new THREE.Group();
     
-    // Create a long beam that will be scaled dynamically
-    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.4, 1, 16, 8, true);
+    // Main visible beam with layered effect for realism
+    const beamGeometry = new THREE.CylinderGeometry(0.03, 0.4, 1, 16, 1, true);
+    
+    // Outer beam - visible but transparent
     const beamMaterial = new THREE.MeshBasicMaterial({
         color: color,
         transparent: true,
-        opacity: 0.15,
+        opacity: 0.2,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
-    
-    // Create multiple beam segments for realistic volumetric look
     const mainBeam = new THREE.Mesh(beamGeometry, beamMaterial);
     
-    // Create inner beam core
+    // Inner beam - brighter core
+    const coreBeamMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
     const coreBeam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.02, 0.2, 1, 8, 4, true),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.3,
-            side: THREE.DoubleSide,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        })
+        new THREE.CylinderGeometry(0.01, 0.15, 1, 8, 1, true),
+        coreBeamMaterial
     );
     
-    // Add beams to group
+    // Add dust particles for volumetric effect
+    const particles = createBeamDustParticles(color, 50); // More particles
+    
+    // Add all beam elements
     beamGroup.add(mainBeam);
     beamGroup.add(coreBeam);
-    
-    // Create and add dust particles
-    const particles = createBeamDustParticles(color, 30); // More particles
     beamGroup.add(particles);
     
     // Assemble the fixture
@@ -999,6 +1077,9 @@ function animate() {
         // Always update light effects
         updateLightArmatures(time);
         
+        // Rotate mirror ball
+        updateMirrorBall(delta);
+        
         // Only update orbit controls when not in VR and if they exist
         if (!renderer.xr.isPresenting && controls && typeof controls.update === 'function') {
             controls.update();
@@ -1015,6 +1096,149 @@ function animate() {
             document.getElementById('error').style.display = 'block';
         }
     }
+}
+
+// Add function to update mirror ball rotation
+function updateMirrorBall(delta) {
+    scene.traverse(object => {
+        // Find the mirror ball by checking userData
+        if (object.userData && object.userData.rotationSpeed !== undefined) {
+            // Rotate slowly around Y axis
+            object.rotation.y += object.userData.rotationSpeed * delta;
+        }
+    });
+}
+
+// Improved function to update light beams
+function updateLightArmatures(time) {
+    if (!lightArmatures || lightArmatures.length === 0) return;
+    
+    // Calculate shared color
+    const hue = (Math.sin(time * 0.1) + 1) / 2;
+    const sharedColor = new THREE.Color().setHSL(hue, 1.0, 0.5);
+    
+    // Create a raycaster for beam length calculation
+    const raycaster = new THREE.Raycaster();
+    
+    // Collider objects - include floor, walls, ceiling
+    const colliders = [];
+    scene.traverse(object => {
+        if (object.isMesh && !object.userData.isLight && 
+            !object.userData.isBeam && !object.userData.isParticle) {
+            colliders.push(object);
+        }
+    });
+    
+    // Update each light
+    for (let i = 0; i < lightArmatures.length; i++) {
+        const fixture = lightArmatures[i];
+        if (!fixture || !fixture.head) continue;
+        
+        // Get rotation direction
+        const rotationDirection = fixture.isOnRightSide ? -1 : 1;
+        
+        // Calculate the movement pattern - crossing pattern
+        const pattern = Math.sin(time * 0.3) * 1.2 * rotationDirection;
+        
+        // Apply rotations
+        fixture.head.rotation.x = Math.sin(time * 0.2 + i * 0.1) * 0.6 - 0.3;
+        fixture.head.rotation.z = pattern;
+        
+        // Update colors
+        if (fixture.spotlight) {
+            fixture.spotlight.color.copy(sharedColor);
+            fixture.spotlight.intensity = 8.0 + Math.sin(time * 2) * 2.0;
+        }
+        
+        if (fixture.lens && fixture.lens.material) {
+            fixture.lens.material.color.copy(sharedColor);
+        }
+        
+        // Update the beam
+        if (fixture.beamGroup && fixture.beams) {
+            // Update beam colors
+            fixture.beams.forEach(beam => {
+                if (beam.material) {
+                    beam.material.color.copy(sharedColor);
+                }
+            });
+            
+            // Get world position and direction
+            const lightPos = new THREE.Vector3();
+            fixture.head.getWorldPosition(lightPos);
+            
+            // Get beam direction from head rotation
+            const direction = new THREE.Vector3(0, -1, 0);
+            direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
+            direction.normalize();
+            
+            // Set up raycaster to find beam length
+            raycaster.set(lightPos, direction);
+            
+            // Check intersection with all colliders
+            const intersects = raycaster.intersectObjects(colliders);
+            
+            // If beam hits something
+            if (intersects.length > 0) {
+                const hitPoint = intersects[0].point;
+                const distance = lightPos.distanceTo(hitPoint);
+                
+                // Scale beams to hit point
+                fixture.beams.forEach(beam => {
+                    beam.scale.y = distance;
+                });
+                
+                // Adjust beam group to point at intersection
+                if (fixture.beamGroup) {
+                    // Save original rotation
+                    const origRotation = fixture.head.rotation.clone();
+                    
+                    // Make beam look at hit point
+                    fixture.beamGroup.lookAt(hitPoint);
+                    
+                    // Apply slight random wobble for realism
+                    fixture.beamGroup.rotation.x += Math.sin(time * 5 + i) * 0.01;
+                    fixture.beamGroup.rotation.z += Math.cos(time * 4 + i) * 0.01;
+                }
+                
+                // Update particles within beam
+                if (fixture.particles) {
+                    updateBeamParticles(fixture.particles, time, distance);
+                }
+            }
+        }
+    }
+}
+
+// Improved particle update function
+function updateBeamParticles(particles, time, beamLength) {
+    particles.children.forEach(particle => {
+        if (!particle.userData) return;
+        
+        // Move particles
+        particle.position.y += particle.userData.speed;
+        
+        // Add spiral motion
+        particle.userData.theta += particle.userData.thetaSpeed;
+        const radius = particle.userData.radius * (1 + Math.sin(time * 2) * 0.1);
+        particle.position.x = Math.sin(particle.userData.theta) * radius;
+        particle.position.z = Math.cos(particle.userData.theta) * radius;
+        
+        // Reset particles beyond beam length
+        if (particle.position.y < -beamLength || particle.position.y > 0.2) {
+            particle.position.y = -Math.random() * beamLength * 0.9;
+            
+            // Randomize position within beam
+            const newRadius = Math.random() * 0.3 * (particle.position.y / -beamLength + 0.1);
+            const newTheta = Math.random() * Math.PI * 2;
+            particle.position.x = Math.sin(newTheta) * newRadius;
+            particle.position.z = Math.cos(newTheta) * newRadius;
+            
+            // Update userData
+            particle.userData.radius = newRadius;
+            particle.userData.theta = newTheta;
+        }
+    });
 }
 
 function updateMovement(delta) {
