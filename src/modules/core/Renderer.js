@@ -3,8 +3,13 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 export class Renderer {
     constructor(canvas) {
+        // Check if canvas is a valid HTMLCanvasElement
+        if (!(canvas instanceof HTMLCanvasElement)) {
+            throw new Error("Invalid canvas provided to Renderer");
+        }
+        
         this.renderer = new THREE.WebGLRenderer({
-            canvas,
+            canvas: canvas,
             antialias: true,
             powerPreference: "high-performance"
         });

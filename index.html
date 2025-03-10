@@ -148,9 +148,16 @@
     <script type="module">
         import { Application } from './src/modules/core/Application.js';
         
+        // Get the canvas element
         const canvas = document.getElementById('club-scene');
-        const app = new Application(canvas);
-        window.app = app; // Expose for debugging
+        
+        // Check if canvas exists
+        if (!canvas) {
+            console.error("Canvas element not found!");
+        } else {
+            const app = new Application(canvas);
+            window.app = app; // Expose for debugging
+        }
     </script>
 </body>
 </html>

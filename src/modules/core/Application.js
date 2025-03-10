@@ -10,6 +10,11 @@ import { InputSystem } from './InputSystem.js';
 
 export class Application {
     constructor(canvas) {
+        // Validate canvas
+        if (!(canvas instanceof HTMLCanvasElement)) {
+            throw new Error("Invalid canvas provided to Application");
+        }
+
         this.resources = new ResourceManager();
         this.scene = new Scene();
         this.camera = new Camera();
