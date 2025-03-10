@@ -1,6 +1,6 @@
-import * as THREE from 'https://unpkg.com/three@0.147.0/build/three.module.js';
-import { OrbitControls } from 'https://unpkg.com/three@0.147.0/examples/jsm/controls/OrbitControls.js';
-import { VRButton } from 'https://unpkg.com/three@0.147.0/examples/jsm/webxr/VRButton.js';
+import * as THREE from 'https://cdn.skypack.dev/three@0.147.0';
+import { OrbitControls } from 'https://cdn.skypack.dev/three@0.147.0/examples/jsm/controls/OrbitControls.js';
+import { VRButton } from 'https://cdn.skypack.dev/three@0.147.0/examples/jsm/webxr/VRButton.js';
 
 let scene, camera, renderer, controls;
 
