@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import Stats from 'stats.js';
 import { ResourceManager } from './ResourceManager.js';
 import { Renderer } from './Renderer.js';
 import { Scene } from './Scene.js';
@@ -28,10 +27,9 @@ export class Application {
             input: new InputSystem(this.camera)
         };
 
-        // Initialize Stats with proper type checking
-        if (typeof Stats !== 'undefined') {
-            this.stats = new Stats();
-
+        // Use global Stats object if present
+        if (typeof window.Stats !== 'undefined') {
+            this.stats = new window.Stats();
             document.body.appendChild(this.stats.dom);
         }
         
