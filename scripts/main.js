@@ -317,20 +317,28 @@ function createLightFixture(position, color) {
     spotlight.castShadow = false; // Disable shadow casting for performance
     
     const target = new THREE.Object3D();
-    target.position.set(0, -10, 0);
+    // Calculate beam target position - adjust to floor level
+    const floorY = 0; // Y position of the floor
+    // Calculate distance to floor from light position
+    const distanceToFloor = position.y - floorY;
+    // Direct the target to a point on the floor
+    target.position.set(0, -distanceToFloor, 0); 
     spotlight.target = target;
     
-    // Beam with simpler setup
-    const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.5, 10, 8, 1, true), // Simplified geometry
-        new THREE.MeshBasicMaterial({
-            color: color,
-            transparent: true,
-            opacity: 0.1,
-            side: THREE.DoubleSide
-        })
-    );
-    beam.position.y = -5;
+    // Create a longer beam that extends to the floor
+    // Use a longer length to ensure it reaches the floor (position.y)
+    const beamLength = distanceToFloor;
+    const beamGeometry = new THREE.CylinderGeometry(0.05, 0.5, beamLength, 8, 4, true);
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide
+    });
+    
+    // Position beam to start at light and extend downward
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+    beam.position.y = -beamLength / 2; // Center the beam geometry
     
     // Assemble the fixture
     head.add(housing);
@@ -351,8 +359,60 @@ function createLightFixture(position, color) {
         beam,
         lens,
         color,
-        target
+        target,
+        position: position.clone(),
+        beamLength
     };
+}
+
+// Updated function to adjust beam geometry based on head rotation
+function updateLightArmatures(time) {
+    if (!lightArmatures || lightArmatures.length === 0) {
+        return;
+    }
+    
+    const floorY = 0; // Y position of the floor
+    
+    for (let i = 0; i < lightArmatures.length; i++) {
+        const fixture = lightArmatures[i];
+        
+        if (!fixture || !fixture.head) continue;
+        
+        // Calculate rotation for this fixture
+        const speed = 0.15 + (i % 5) * 0.05;
+        const phaseX = i * 0.5;
+        const phaseZ = i * 0.7;
+        
+        // Apply rotation to the head
+        fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2;
+        fixture.head.rotation.z = Math.cos(time * speed * 0.7 + phaseZ) * 0.5;
+        
+        // Update beam to extend to floor based on current rotation
+        if (fixture.beam && fixture.position) {
+            // Get the world position and direction of the spotlight
+            const lightWorldPos = new THREE.Vector3();
+            fixture.head.getWorldPosition(lightWorldPos);
+            
+            // Calculate direction vector based on head rotation
+            const direction = new THREE.Vector3(0, -1, 0);
+            direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
+            
+            // Simple floor intersection calculation
+            // Distance to floor = (lightWorldPos.y - floorY) / direction.y
+            const distance = (lightWorldPos.y - floorY) / -direction.y;
+            
+            // Update beam length and scale to reach the floor
+            if (distance > 0 && fixture.beam.geometry) {
+                // Scale the beam to match the required length
+                fixture.beam.scale.y = distance / fixture.beamLength;
+                
+                // Update opacity based on time
+                if (fixture.beam.material) {
+                    fixture.beam.material.opacity = 0.1 + Math.sin(time * 2 + i) * 0.05;
+                }
+            }
+        }
+    }
 }
 
 function createLightParticles(color) {
@@ -890,18 +950,46 @@ function updateLightArmatures(time) {
         return;
     }
     
+    const floorY = 0; // Y position of the floor
+    
     for (let i = 0; i < lightArmatures.length; i++) {
         const fixture = lightArmatures[i];
         
         if (!fixture || !fixture.head) continue;
         
-        // Simpler movement pattern
-        fixture.head.rotation.x = Math.sin(time * 0.3) * 0.5 - 0.2;
-        fixture.head.rotation.z = Math.cos(time * 0.2) * 0.3;
+        // Calculate rotation for this fixture
+        const speed = 0.15 + (i % 5) * 0.05;
+        const phaseX = i * 0.5;
+        const phaseZ = i * 0.7;
         
-        // Update beam opacity
-        if (fixture.beam && fixture.beam.material) {
-            fixture.beam.material.opacity = 0.1 + Math.sin(time) * 0.05;
+        // Apply rotation to the head
+        fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2;
+        fixture.head.rotation.z = Math.cos(time * speed * 0.7 + phaseZ) * 0.5;
+        
+        // Update beam to extend to floor based on current rotation
+        if (fixture.beam && fixture.position) {
+            // Get the world position and direction of the spotlight
+            const lightWorldPos = new THREE.Vector3();
+            fixture.head.getWorldPosition(lightWorldPos);
+            
+            // Calculate direction vector based on head rotation
+            const direction = new THREE.Vector3(0, -1, 0);
+            direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
+            
+            // Simple floor intersection calculation
+            // Distance to floor = (lightWorldPos.y - floorY) / direction.y
+            const distance = (lightWorldPos.y - floorY) / -direction.y;
+            
+            // Update beam length and scale to reach the floor
+            if (distance > 0 && fixture.beam.geometry) {
+                // Scale the beam to match the required length
+                fixture.beam.scale.y = distance / fixture.beamLength;
+                
+                // Update opacity based on time
+                if (fixture.beam.material) {
+                    fixture.beam.material.opacity = 0.1 + Math.sin(time * 2 + i) * 0.05;
+                }
+            }
         }
     }
 }
