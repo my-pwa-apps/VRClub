@@ -31,6 +31,15 @@ async function init() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    // Add VR button
+    document.getElementById('vr-button').appendChild(VRButton.createButton(renderer));
+    
+    // Initialize orbit controls
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2;
+
     // Basic lighting
     const ambient = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambient);
@@ -577,7 +586,10 @@ function animate() {
     } catch (error) {
         console.error('Error in light animation:', error);
     }
-    controls.update();
+    // Update controls if defined
+    if (controls && typeof controls.update === 'function') {
+        controls.update();
+    }
     
     try {
         renderer.render(scene, camera);
