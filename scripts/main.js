@@ -334,29 +334,40 @@ function createBasicStructure(materials) {
 function createLightingArmatures() {
     console.log('Creating lighting armatures with realistic beams...');
     
-    // Create truss material
+    // Create realistic truss material
     const trussMaterial = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        metalness: 0.8,
-        roughness: 0.2
+        color: 0x444444,
+        metalness: 0.9,
+        roughness: 0.3
     });
 
-    // Create truss geometry (shared)
-    const trussGeometry = new THREE.BoxGeometry(0.2, 0.2, 20);
+    // Create more detailed truss geometry
+    const mainTrussGeometry = new THREE.BoxGeometry(0.2, 0.2, 20);
+    const crossTrussGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.5);
     
     // Create trusses
     [-7, -3.5, 0, 3.5, 7].forEach(x => {
-        const truss = new THREE.Mesh(trussGeometry, trussMaterial);
+        // Main truss beam
+        const truss = new THREE.Mesh(mainTrussGeometry, trussMaterial);
         truss.position.set(x, 9.8, 0);
+        
+        // Add cross beams for more realistic truss structure
+        for (let z = -9; z <= 9; z += 1.5) {
+            const crossBeam = new THREE.Mesh(crossTrussGeometry, trussMaterial);
+            crossBeam.position.z = z;
+            crossBeam.rotation.y = Math.PI / 2;
+            truss.add(crossBeam);
+        }
+        
         scene.add(truss);
         
         // Add light fixtures with realistic beams
         [-8, -4, 0, 4, 8].forEach(z => {
-            // Use the same initial color for all fixtures
-            const initialColor = 0xff0000; // Start with red
+            // Use more vibrant base colors
+            const initialColor = new THREE.Color().setHSL(Math.random(), 1.0, 0.5);
             
-            // Create light fixture
-            const fixture = createLightFixture(new THREE.Vector3(x, 9.7, z), initialColor);
+            // Create detailed light fixture
+            const fixture = createRealisticLightFixture(new THREE.Vector3(x, 9.7, z), initialColor);
             
             // Store the side information (left or right)
             fixture.isOnRightSide = x > 0;
@@ -367,312 +378,349 @@ function createLightingArmatures() {
     });
 }
 
-// Enhance light fixture creation with more visible beams
-function createLightFixture(position, color) {
+// Create highly detailed and realistic light fixture
+function createRealisticLightFixture(position, color) {
     const group = new THREE.Group();
     
-    // Base mount
+    // -- Create detailed base mount --
+    const baseGroup = new THREE.Group();
+    
+    // Main mounting bracket
+    const baseMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x333333,
+        metalness: 0.9,
+        roughness: 0.4
+    });
+    
     const base = new THREE.Mesh(
-        new THREE.BoxGeometry(0.3, 0.15, 0.3),
-        new THREE.MeshLambertMaterial({ color: 0x222222 })
+        new THREE.BoxGeometry(0.4, 0.18, 0.4),
+        baseMaterial
     );
+    baseGroup.add(base);
     
-    // Moving head
-    const head = new THREE.Group();
+    // Add mounting hardware (bolts)
+    const boltMaterial = new THREE.MeshStandardMaterial({
+        color: 0x888888,
+        metalness: 0.9,
+        roughness: 0.3
+    });
     
-    // Light housing
+    [-0.15, 0.15].forEach(x => {
+        [-0.15, 0.15].forEach(z => {
+            const bolt = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.03, 0.03, 0.05, 6),
+                boltMaterial
+            );
+            bolt.position.set(x, 0.1, z);
+            bolt.rotation.x = Math.PI/2;
+            baseGroup.add(bolt);
+        });
+    });
+    
+    group.add(baseGroup);
+    
+    // -- Create detailed moving head --
+    const headGroup = new THREE.Group();
+    
+    // Yoke (frame that holds the light)
+    const yokeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        metalness: 0.8,
+        roughness: 0.4
+    });
+    
+    // Yoke arms
+    const yokeGeometry = new THREE.BoxGeometry(0.08, 0.6, 0.08);
+    const leftYoke = new THREE.Mesh(yokeGeometry, yokeMaterial);
+    leftYoke.position.x = 0.25;
+    headGroup.add(leftYoke);
+    
+    const rightYoke = new THREE.Mesh(yokeGeometry, yokeMaterial);
+    rightYoke.position.x = -0.25;
+    headGroup.add(rightYoke);
+    
+    // Moving light housing in the middle of the yoke
+    const housingGroup = new THREE.Group();
+    
+    // Main cylindrical housing
+    const housingMaterial = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        metalness: 0.9,
+        roughness: 0.3
+    });
+    
     const housing = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 0.4, 0.2),
-        new THREE.MeshLambertMaterial({ color: 0x333333 })
+        new THREE.CylinderGeometry(0.18, 0.22, 0.4, 16),
+        housingMaterial
     );
+    housing.rotation.x = Math.PI/2;
+    housingGroup.add(housing);
     
-    // Highly visible lens
+    // Back cover with cooling fins
+    const backCover = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.18, 0.05, 16),
+        baseMaterial
+    );
+    backCover.position.z = 0.22;
+    backCover.rotation.x = Math.PI/2;
+    housingGroup.add(backCover);
+    
+    // Add cooling fins
+    const finMaterial = new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        metalness: 0.8,
+        roughness: 0.5
+    });
+    
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const fin = new THREE.Mesh(
+            new THREE.BoxGeometry(0.05, 0.2, 0.01),
+            finMaterial
+        );
+        fin.position.set(
+            Math.sin(angle) * 0.18,
+            Math.cos(angle) * 0.18,
+            0.22
+        );
+        fin.lookAt(new THREE.Vector3(0, 0, 0.22));
+        housingGroup.add(fin);
+    }
+    
+    // Front lens with intense emission
+    const lensMaterial = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 2.0,
+        transparent: true,
+        opacity: 0.9
+    });
+    
     const lens = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.12, 0.05, 16),
-        new THREE.MeshBasicMaterial({
-            color: color,
-            transparent: true,
-            opacity: 1.0
-        })
+        new THREE.CylinderGeometry(0.15, 0.15, 0.05, 16),
+        lensMaterial
     );
-    lens.rotation.x = Math.PI / 2;
-    lens.position.set(0, -0.2, 0);
+    lens.position.z = -0.22;
+    lens.rotation.x = Math.PI/2;
+    housingGroup.add(lens);
     
-    // Enhanced spotlight for better lighting
-    const spotlight = new THREE.SpotLight(color, 8); // Higher intensity
-    spotlight.position.set(0, -0.2, 0);
-    spotlight.angle = Math.PI / 10; // Narrower angle for more defined beams
+    // Mount housing to the yoke
+    housingGroup.position.y = -0.3;
+    headGroup.add(housingGroup);
+    
+    // Mount head to base with rotation offset
+    headGroup.position.y = -0.1;
+    group.add(headGroup);
+    
+    // -- Create intense spotlight --
+    const spotlight = new THREE.SpotLight(color, 15);
+    spotlight.position.copy(housingGroup.position);
+    spotlight.position.z -= 0.22;
+    spotlight.angle = Math.PI / 12;
     spotlight.penumbra = 0.2;
     spotlight.decay = 1;
-    spotlight.distance = 40; // Longer distance
+    spotlight.distance = 40;
     spotlight.castShadow = false;
     
     const target = new THREE.Object3D();
-    target.position.set(0, -40, 0); // Point far down
+    target.position.set(0, -40, 0);
     spotlight.target = target;
+    headGroup.add(spotlight);
+    headGroup.add(target);
     
-    // Create enhanced beam group
+    // -- Create SOLID visible beam --
     const beamGroup = new THREE.Group();
+    beamGroup.position.copy(housingGroup.position);
+    beamGroup.position.z -= 0.22;
     
-    // Main visible beam - make it MUCH more visible
-    const beamGeometry = new THREE.CylinderGeometry(0.1, 0.8, 1, 16, 1, true);
-    
-    // Outer beam - dramatically increase opacity
-    const beamMaterial = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0.7, // Significantly increased from 0.2
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
-    const mainBeam = new THREE.Mesh(beamGeometry, beamMaterial);
-    
-    // Inner beam - much brighter core
-    const coreBeamMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.9, // Increased to make beam very visible
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
+    // HIGHLY VISIBLE solid beam with multiple layers for better visibility
     const coreBeam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.4, 1, 12, 1, true),
-        coreBeamMaterial
-    );
-    
-    // Add an additional glow layer for improved visibility
-    const glowBeamMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
-    const glowBeam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.8, 1, 16, 1, true),
-        glowBeamMaterial
-    );
-    
-    // Add dust particles for volumetric effect
-    const particles = createBeamDustParticles(color, 75); // More particles
-    
-    // Add all beam elements
-    beamGroup.add(mainBeam);
-    beamGroup.add(coreBeam);
-    beamGroup.add(glowBeam); // Add new glow layer
-    beamGroup.add(particles);
-    
-    // Assemble the fixture
-    head.add(housing);
-    head.add(lens);
-    head.add(spotlight);
-    head.add(target);
-    head.add(beamGroup);
-    head.position.y = -0.25;
-    
-    group.add(base);
-    group.add(head);
-    group.position.copy(position);
-    
-    return {
-        group,
-        head,
-        spotlight,
-        beamGroup,
-        beams: [mainBeam, coreBeam],
-        lens,
-        color,
-        target,
-        position: position.clone(),
-        particles
-    };
-}
-
-// New function for creating stationary dust particles in the club space
-function createStationaryDustParticles() {
-    const particles = new THREE.Group();
-    const particleCount = 500;
-    const volume = new THREE.Box3(
-        new THREE.Vector3(-8, 0, -8),
-        new THREE.Vector3(8, 7, 8)
-    );
-    
-    // Create a shared geometry for performance
-    const particleGeometry = new THREE.SphereGeometry(0.02, 4, 4);
-    
-    // Create a collection of materials with different opacities
-    const materials = [
+        new THREE.CylinderGeometry(0.02, 0.15, 1, 16, 1, true),
         new THREE.MeshBasicMaterial({
-            color: 0xffffff,
+            color: new THREE.Color(0xffffff),
             transparent: true,
-            opacity: 0.3,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.2,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.1,
+            opacity: 0.95,
+            side: THREE.DoubleSide,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         })
-    ];
-    
-    for (let i = 0; i < particleCount; i++) {
-        const particle = new THREE.Mesh(
-            particleGeometry,
-            materials[Math.floor(Math.random() * materials.length)]
-        );
-        
-        // Position randomly within the volume
-        particle.position.set(
-            volume.min.x + Math.random() * (volume.max.x - volume.min.x),
-            volume.min.y + Math.random() * (volume.max.y - volume.min.y),
-            volume.min.z + Math.random() * (volume.max.z - volume.min.z)
-        );
-        
-        // Random scale for variety
-        const scale = 0.3 + Math.random() * 0.7;
-        particle.scale.set(scale, scale, scale);
-        
-        // Store original color and state
-        particle.userData = {
-            originalOpacity: particle.material.opacity,
-            illuminated: false,
-            illuminationColor: new THREE.Color(),
-            illuminationIntensity: 0,
-            driftVelocity: new THREE.Vector3(
-                (Math.random() - 0.5) * 0.002,
-                (Math.random() - 0.5) * 0.001,
-                (Math.random() - 0.5) * 0.002
-            )
-        };
-        
-        particles.add(particle);
-    }
-    
-    scene.add(particles);
-    return particles;
-}
-
-// Create beam dust particles that are actually beams, not particles
-function createBeamDustParticles(color, count = 50) {
-    const particles = new THREE.Group();
-    
-    // Add a solid visible beam first
-    const beamMaterial = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0.6,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
-    
-    const solidBeam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.5, 1, 16, 1, true),
-        beamMaterial
     );
-    particles.add(solidBeam);
     
-    return particles;
+    const midBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.3, 1, 16, 1, true),
+        new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.85,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    
+    const outerBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.5, 1, 20, 1, true),
+        new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.6,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    
+    // Position all beam layers
+    coreBeam.rotation.x = Math.PI;
+    midBeam.rotation.x = Math.PI;
+    outerBeam.rotation.x = Math.PI;
+    
+    beamGroup.add(outerBeam);
+    beamGroup.add(midBeam);
+    beamGroup.add(coreBeam);
+    
+    headGroup.add(beamGroup);
+    
+    // Position the complete fixture
+    group.position.copy(position);
+    
+    // Return all components in a well-structured object
+    return {
+        group,
+        head: headGroup,
+        housing: housingGroup,
+        spotlight,
+        beamGroup,
+        beams: [coreBeam, midBeam, outerBeam],
+        lens,
+        color,
+        target,
+        position: position.clone()
+    };
 }
 
-// Improved function to update light beams
+// Optimized function to update light beams
 function updateLightArmatures(time) {
     if (!lightArmatures || lightArmatures.length === 0) return;
     
-    const floorY = 0; // Y position of the floor
-    
-    // Calculate a single color for all lights based on time
-    // This makes all lights change color together
+    // Calculate shared color - use more vibrant colors
     const hue = (Math.sin(time * 0.1) + 1) / 2;
-    const sharedColor = new THREE.Color().setHSL(hue, 1.0, 0.5);
+    const sharedColor = new THREE.Color().setHSL(hue, 1.0, 0.6);
     
+    // Create a raycaster for beam length calculation
+    const raycaster = new THREE.Raycaster();
+    
+    // Get floor and relevant objects once outside the loop
+    const floor = scene.children.find(obj => 
+        obj.position.y === 0 && obj.geometry instanceof THREE.PlaneGeometry);
+    
+    // Update each light
     for (let i = 0; i < lightArmatures.length; i++) {
         const fixture = lightArmatures[i];
-        
         if (!fixture || !fixture.head) continue;
         
-        // Determine movement direction based on which side the fixture is on
-        // Right side fixtures move left, left side fixtures move right
-        let rotationDirection = fixture.isOnRightSide ? -1 : 1;
+        // Get rotation direction based on side
+        const rotationDirection = fixture.isOnRightSide ? -1 : 1;
         
-        // Calculate rotation for this fixture - shared pattern by side
-        const pattern = Math.sin(time * 0.3) * 1.2 * rotationDirection;
+        // Calculate vertical and horizontal rotation patterns
+        const verticalAngle = Math.sin(time * 0.2 + i * 0.1) * 0.6 - 0.3;
+        const horizontalAngle = Math.sin(time * 0.3 + i * 0.2) * 1.2 * rotationDirection;
         
-        // Apply vertical rotation (up/down)
-        fixture.head.rotation.x = Math.sin(time * 0.2 + i * 0.1) * 0.6 - 0.3; // Tilt down slightly
+        // Apply rotations
+        fixture.head.rotation.x = verticalAngle;
+        fixture.head.rotation.z = horizontalAngle;
         
-        // Apply horizontal rotation (left/right) - this creates the crossing pattern
-        fixture.head.rotation.z = pattern;
+        // Update colors with intensity fluctuations
+        const pulseIntensity = 12.0 + Math.sin(time * 2) * 3.0;
         
-        // Update color of spotlight to the shared color
         if (fixture.spotlight) {
             fixture.spotlight.color.copy(sharedColor);
-            fixture.spotlight.intensity = 7.0 + Math.sin(time * 2) * 1.0;
+            fixture.spotlight.intensity = pulseIntensity;
         }
         
-        // Update color of lens to the shared color
         if (fixture.lens && fixture.lens.material) {
             fixture.lens.material.color.copy(sharedColor);
+            fixture.lens.material.emissive.copy(sharedColor);
+            fixture.lens.material.emissiveIntensity = 1.5 + Math.sin(time * 2) * 0.5;
         }
         
-        // Update the beam
+        // Update beam colors and visibility
         if (fixture.beamGroup && fixture.beams) {
-            // Update beam colors with more saturation
+            // Update all beam layers colors and opacity
             fixture.beams.forEach((beam, index) => {
                 if (beam.material) {
-                    // Customize color and opacity based on which beam element it is
-                    const baseColor = sharedColor.clone();
                     if (index === 0) {
-                        // Main beam
-                        beam.material.color.copy(baseColor);
-                        beam.material.opacity = 0.4 + Math.sin(time * 1.5 + i) * 0.1;
-                    } else if (index === 1) {
-                        // Core beam - brighter
-                        beam.material.opacity = 0.7 + Math.sin(time * 2 + i) * 0.1;
-                    } else if (index === 2) {
-                        // Glow beam - use more saturated color
-                        baseColor.offsetHSL(0, 0.2, 0.1);
-                        beam.material.color.copy(baseColor);
-                        beam.material.opacity = 0.3 + Math.sin(time * 1.7 + i) * 0.15;
+                        // Core beam always white for intensity
+                        beam.material.color.set(0xffffff);
+                        beam.material.opacity = 0.9 + Math.sin(time * 3) * 0.1;
+                    } else {
+                        // Outer beams take color from shared color
+                        beam.material.color.copy(sharedColor);
+                        beam.material.opacity = (0.85 - index * 0.2) + Math.sin(time * 2 + i) * 0.15;
                     }
                 }
             });
             
-            // Get the world position and direction of the spotlight
+            // Calculate beam intersection with floor
             const lightPos = new THREE.Vector3();
-            fixture.head.getWorldPosition(lightPos);
+            fixture.housing.getWorldPosition(lightPos);
             
             const direction = new THREE.Vector3(0, -1, 0);
             direction.applyQuaternion(fixture.head.getWorldQuaternion(new THREE.Quaternion()));
+            direction.normalize();
             
-            // Raycast to find intersections with the floor
-            const raycaster = new THREE.Raycaster(lightPos, direction);
-            const intersects = raycaster.intersectObject(scene, true);
+            // Set up raycaster for floor intersection
+            raycaster.set(lightPos, direction);
             
-            // If beam hits something - enhance scaling
-            if (intersects.length > 0) {
-                const hitPoint = intersects[0].point;
-                const distance = lightPos.distanceTo(hitPoint);
+            // Cast ray to floor
+            const floorIntersects = raycaster.intersectObject(floor);
+            
+            if (floorIntersects.length > 0) {
+                const distance = floorIntersects[0].distance;
                 
-                // Scale beams to hit point with different scales for layering effect
-                fixture.beams.forEach((beam, index) => {
-                    // Slightly different scales for visual effect
-                    const scaleMultiplier = index === 0 ? 1.0 : (index === 1 ? 0.96 : 1.05);
-                    beam.scale.y = distance * scaleMultiplier;
+                // Scale all beam layers to floor intersection
+                fixture.beams.forEach(beam => {
+                    beam.scale.y = distance * 0.95; // Slight adjustment to prevent z-fighting
                 });
+                
+                // Make spot on floor by creating a light spot
+                const spotOnFloor = floorIntersects[0].point;
+                
+                // Find or create floor spot light
+                if (!fixture.floorSpot) {
+                    const spotMaterial = new THREE.MeshBasicMaterial({
+                        color: sharedColor,
+                        transparent: true,
+                        opacity: 0.7,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false
+                    });
+                    
+                    const spot = new THREE.Mesh(
+                        new THREE.CircleGeometry(0.5, 16),
+                        spotMaterial
+                    );
+                    spot.rotation.x = -Math.PI/2;
+                    spot.position.y = 0.01; // Just above floor
+                    
+                    scene.add(spot);
+                    fixture.floorSpot = spot;
+                }
+                
+                // Update floor spot
+                if (fixture.floorSpot) {
+                    fixture.floorSpot.position.x = spotOnFloor.x;
+                    fixture.floorSpot.position.z = spotOnFloor.z;
+                    fixture.floorSpot.material.color.copy(sharedColor);
+                    
+                    // Pulse the size of the spot with the beat
+                    const spotSize = 0.3 + Math.sin(time * 2) * 0.1 + (distance * 0.1);
+                    fixture.floorSpot.scale.set(spotSize, spotSize, 1);
+                    
+                    // Adjust opacity based on angle - more perpendicular = more visible
+                    const dotProduct = Math.abs(direction.dot(new THREE.Vector3(0, 1, 0)));
+                    fixture.floorSpot.material.opacity = 0.7 * dotProduct;
+                }
             }
         }
     }
@@ -1607,8 +1655,10 @@ function animate() {
         // Rotate mirror ball
         updateMirrorBall(delta);
         
-        // Update dancers
-        updateDancers(time);
+        // Update dancers if they exist
+        if (dancers.length > 0 && typeof updateDancers === 'function') {
+            updateDancers(time);
+        }
         
         // Only update orbit controls when not in VR and if they exist
         if (!renderer.xr.isPresenting && controls && typeof controls.update === 'function') {
@@ -1619,10 +1669,9 @@ function animate() {
         renderer.render(scene, camera);
     } catch (error) {
         console.error('Animation error:', error);
-        // Don't repeatedly show errors
         if (renderer && renderer.setAnimationLoop) {
             renderer.setAnimationLoop(null);
-            document.getElementById('error').textContent = 'Rendering error. Please refresh the page.';
+            document.getElementById('error').textContent = 'Rendering error: ' + error.message;
             document.getElementById('error').style.display = 'block';
         }
     }
