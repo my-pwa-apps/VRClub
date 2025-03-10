@@ -92,16 +92,65 @@
         Check out the bar and DJ booth!
     </div>
     <div id="club-name">CONCRETE</div>
-    <canvas id="club-scene"></canvas>
+    <can bass id="club-scene"></canvas>
     <div id="vr-button"></div>
     <!-- Add error display div -->
     <div id="error" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); color:white; padding:20px; border-radius:5px;"></div>
+
+    <!-- Add debug panel -->
+    <div id="debug-panel" style="position:fixed; top:70px; left:20px; background:rgba(0,0,0,0.7); color:white; padding:10px; border-radius:5px; font-family:monospace; z-index:100;">
+        <div id="debug-title" style="font-weight:bold;">Debug Info</div>
+        <div id="fps"></div>
+        <div id="objects"></div>
+        <div id="position"></div>
+        <button id="toggle-wireframe" style="margin-top:8px;">Toggle Wireframe</button>
+    </div>
+
+    <script>
+        // Add this script to enable additional debugging
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const app = window.app; // Expose app from the module
+                if (!app) return;
+                
+                // FPS counter
+                setInterval(() => {
+                    document.getElementById('fps').textContent = 
+                        `FPS: ${app.stats ? Math.round(app.stats.fps) : 'N/A'}`;
+                }, 1000);
+                
+                // Object counter
+                setInterval(() => {
+                    let objCount = 0;
+                    app.scene.traverse(() => objCount++);
+                    document.getElementById('objects').textContent = 
+                        `Objects: ${objCount}`;
+                    
+                    // Camera position
+                    const pos = app.camera.position;
+                    document.getElementById('position').textContent = 
+                        `Pos: ${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+                }, 500);
+                
+                // Wireframe toggle
+                document.getElementById('toggle-wireframe').addEventListener('click', () => {
+                    app.scene.traverse(obj => {
+                        if (obj.material && !obj.userData.originalWireframe) {
+                            obj.userData.originalWireframe = obj.material.wireframe;
+                            obj.material.wireframe = !obj.material.wireframe;
+                        }
+                    });
+                });
+            }, 2000);
+        });
+    </script>
 
     <script type="module">
         import { Application } from './src/modules/core/Application.js';
         
         const canvas = document.getElementById('club-scene');
         const app = new Application(canvas);
+        window.app = app; // Expose for debugging
     </script>
 </body>
 </html>

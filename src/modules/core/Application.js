@@ -53,24 +53,45 @@ export class Application {
 
     async init() {
         try {
+            console.log("🚀 Starting application initialization...");
             const loadingScreen = document.getElementById('loading');
             
-            // Initialize systems sequentially to prevent resource contention
+            // Add debugging info to the loading screen
+            if (loadingScreen) {
+                loadingScreen.innerHTML += '<div id="load-status" style="font-size:14px; margin-top:20px;"></div>';
+            }
+            const updateStatus = (msg) => {
+                console.log(`📋 ${msg}`);
+                const status = document.getElementById('load-status');
+                if (status) status.innerHTML += `<div>${msg}</div>`;
+            };
+            
+            // Initialize systems with status updates
+            updateStatus("Initializing environment...");
             await this.systems.environment.init();
+            
+            updateStatus("Setting up lighting...");
             await this.systems.lighting.init();
+            
+            updateStatus("Creating characters...");
             await this.systems.characters.init();
+            
+            updateStatus("Setting up controls...");
             this.systems.input.init();
             
-            // Start render loop
+            updateStatus("All systems initialized! Starting render loop...");
             this.renderer.setAnimationLoop(this.update.bind(this));
             
             // Hide loading screen with fade
             if (loadingScreen) {
+                loadingScreen.style.transition = 'opacity 1s';
                 loadingScreen.style.opacity = '0';
-                setTimeout(() => loadingScreen.style.display = 'none', 500);
+                setTimeout(() => loadingScreen.style.display = 'none', 1000);
             }
+            
+            console.log("✅ Application fully initialized!");
         } catch (error) {
-            console.error('Application initialization failed:', error);
+            console.error('❌ Application initialization failed:', error);
             this.showError(`Initialization failed: ${error.message}`);
         }
     }

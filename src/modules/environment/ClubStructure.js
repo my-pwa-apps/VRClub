@@ -14,16 +14,19 @@ export class ClubStructure {
     }
 
     createMaterials() {
+        // Create more visually distinct materials
         return {
             floor: new THREE.MeshStandardMaterial({
-                color: 0x222222,
-                metalness: 0.2,
-                roughness: 0.8
+                color: 0x333333,
+                metalness: 0.4,
+                roughness: 0.5,
+                emissive: 0x111111
             }),
             wall: new THREE.MeshStandardMaterial({
-                color: 0x444444,
-                metalness: 0.0,
-                roughness: 1.0
+                color: 0x222266,  // Add some blue tint to walls
+                metalness: 0.2,
+                roughness: 0.8,
+                emissive: 0x050533
             })
         };
     }
@@ -38,13 +41,14 @@ export class ClubStructure {
         floor.receiveShadow = true;
         this.scene.add(floor);
 
-        // Dance floor with emissive material
+        // Dance floor with emissive glow effect
         const danceFloor = new THREE.Mesh(
             new THREE.PlaneGeometry(10, 10),
             new THREE.MeshStandardMaterial({ 
-                color: 0x333333,
-                emissive: 0x111111,
-                metalness: 0.7,
+                color: 0x444444,
+                emissive: 0x222266,  // More noticeable glow
+                emissiveIntensity: 0.5,  // Increased for visibility
+                metalness: 0.8,
                 roughness: 0.2,
                 envMapIntensity: 1.5
             })
@@ -52,6 +56,8 @@ export class ClubStructure {
         danceFloor.rotation.x = -Math.PI / 2;
         danceFloor.position.y = 0.01;
         this.scene.add(danceFloor);
+        
+        console.log("🏢 Club floor created");
     }
 
     createWalls() {
