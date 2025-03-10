@@ -31,14 +31,29 @@ async function init() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    // Set up XR features
+    renderer.xr.enabled = true;
+    
     // Add VR button
     document.getElementById('vr-button').appendChild(VRButton.createButton(renderer));
     
-    // Initialize orbit controls
+    // Initialize orbit controls for non-VR mode only
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2;
+    
+    // Disable orbit controls when entering VR
+    renderer.xr.addEventListener('sessionstart', function() {
+        controls.enabled = false;
+        console.log('VR session started - controls disabled');
+    });
+    
+    // Re-enable orbit controls when exiting VR
+    renderer.xr.addEventListener('sessionend', function() {
+        controls.enabled = true;
+        console.log('VR session ended - controls enabled');
+    });
 
     // Make ambient light much dimmer for a darker atmosphere
     const ambient = new THREE.AmbientLight(0x111111, 0.15); // Reduced intensity
@@ -909,13 +924,20 @@ function animate() {
         const delta = clock.getDelta();
         const time = clock.getElapsedTime();
         
-        updateMovement(delta);
-        updateLightArmatures(time); // This now calls the correct function
+        // Only update camera movement via keyboard when not in VR
+        if (!renderer.xr.isPresenting) {
+            updateMovement(delta);
+        }
         
-        if (controls && typeof controls.update === 'function') {
+        // Always update light effects
+        updateLightArmatures(time);
+        
+        // Only update orbit controls when not in VR and if they exist
+        if (!renderer.xr.isPresenting && controls && typeof controls.update === 'function') {
             controls.update();
         }
         
+        // Let Three.js handle rendering
         renderer.render(scene, camera);
     } catch (error) {
         console.error('Animation error:', error);
