@@ -8,6 +8,7 @@ let velocity = new THREE.Vector3();
 let direction = new THREE.Vector3();
 const clock = new THREE.Clock();
 let lightArmatures = [];
+let dancers = [];
 
 async function init() {
     scene = new THREE.Scene();
@@ -157,6 +158,9 @@ async function createClubEnvironment() {
     
     // Add club logo
     createClubLogo();
+    
+    // Create dancing NPCs
+    createDancers();
     
     // Create lighting armatures with realistic beams
     try {
@@ -618,6 +622,149 @@ function updateLightArmatures(time) {
             }
         }
     }
+}
+
+// Create dancing NPCs
+function createDancers() {
+    const dancerCount = 12; // Number of dancers
+    const danceFloorRadius = 4; // Radius of dance floor area
+    
+    for (let i = 0; i < dancerCount; i++) {
+        // Create a simple humanoid figure
+        const dancer = createDancerFigure();
+        
+        // Position dancers in a circle on the dance floor
+        const angle = (i / dancerCount) * Math.PI * 2;
+        const radius = Math.random() * danceFloorRadius;
+        dancer.position.set(
+            Math.sin(angle) * radius,
+            0,
+            Math.cos(angle) * radius
+        );
+        
+        // Rotate to face center
+        dancer.lookAt(0, 0, 0);
+        
+        // Add some randomness to rotation
+        dancer.rotation.y += (Math.random() - 0.5) * 1.5;
+        
+        // Add dance animation parameters
+        dancer.userData = {
+            danceType: Math.floor(Math.random() * 3), // 0-2 different dance styles
+            danceSpeed: 0.5 + Math.random() * 1.5,    // Random speed
+            dancePhase: Math.random() * Math.PI * 2,  // Random starting phase
+            danceHeight: 0.05 + Math.random() * 0.1   // Random bounce height
+        };
+        
+        scene.add(dancer);
+        dancers.push(dancer);
+    }
+    
+    console.log(`Created ${dancers.length} dancers`);
+}
+
+// Create a simple humanoid figure
+function createDancerFigure() {
+    const dancer = new THREE.Group();
+    
+    // Random color for dancer
+    const hue = Math.random();
+    const color = new THREE.Color().setHSL(hue, 0.8, 0.5);
+    
+    // Create materials with slight emission for visibility in dark club
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: color,
+        emissive: color.clone().multiplyScalar(0.2),
+        roughness: 0.8,
+        metalness: 0.2
+    });
+    
+    // Create head
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 8, 8),
+        bodyMaterial
+    );
+    head.position.y = 1.6;
+    
+    // Create torso
+    const torso = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15, 0.1, 0.6, 8),
+        bodyMaterial
+    );
+    torso.position.y = 1.25;
+    
+    // Create limbs
+    const limbMaterial = bodyMaterial.clone();
+    
+    // Create arms
+    const leftArm = createLimb(limbMaterial, 0.05, 0.5);
+    leftArm.position.set(0.2, 1.4, 0);
+    leftArm.rotation.z = -Math.PI / 4;
+    
+    const rightArm = createLimb(limbMaterial, 0.05, 0.5);
+    rightArm.position.set(-0.2, 1.4, 0);
+    rightArm.rotation.z = Math.PI / 4;
+    
+    // Create legs
+    const leftLeg = createLimb(limbMaterial, 0.07, 0.8);
+    leftLeg.position.set(0.1, 0.9, 0);
+    
+    const rightLeg = createLimb(limbMaterial, 0.07, 0.8);
+    rightLeg.position.set(-0.1, 0.9, 0);
+    
+    // Add all parts to dancer
+    dancer.add(head);
+    dancer.add(torso);
+    dancer.add(leftArm);
+    dancer.add(rightArm);
+    dancer.add(leftLeg);
+    dancer.add(rightLeg);
+    
+    return dancer;
+}
+
+// Helper function to create limbs
+function createLimb(material, radius, height) {
+    const limb = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, height, 8),
+        material
+    );
+    limb.position.y = -height/2;
+    
+    return limb;
+}
+
+// Animate dancers
+function updateDancers(time) {
+    dancers.forEach((dancer) => {
+        if (!dancer.userData) return;
+        
+        const { danceType, danceSpeed, dancePhase, danceHeight } = dancer.userData;
+        
+        switch (danceType) {
+            case 0: // Bouncing dance
+                dancer.position.y = Math.abs(Math.sin(time * danceSpeed + dancePhase)) * danceHeight;
+                dancer.rotation.y += 0.01 * danceSpeed;
+                break;
+                
+            case 1: // Swaying dance
+                dancer.rotation.z = Math.sin(time * danceSpeed + dancePhase) * 0.1;
+                dancer.rotation.y += 0.005 * danceSpeed;
+                break;
+                
+            case 2: // Arm waving dance
+                if (dancer.children.length >= 4) {
+                    // Left arm
+                    dancer.children[2].rotation.z = -Math.PI / 4 + 
+                        Math.sin(time * danceSpeed + dancePhase) * 0.3;
+                    
+                    // Right arm
+                    dancer.children[3].rotation.z = Math.PI / 4 + 
+                        Math.sin(time * danceSpeed + dancePhase + Math.PI) * 0.3;
+                }
+                break;
+        }
+    });
 }
 
 function createLightParticles(color) {
@@ -1115,6 +1262,9 @@ function animate() {
         
         // Rotate mirror ball
         updateMirrorBall(delta);
+        
+        // Update dancers
+        updateDancers(time);
         
         // Only update orbit controls when not in VR and if they exist
         if (!renderer.xr.isPresenting && controls && typeof controls.update === 'function') {
