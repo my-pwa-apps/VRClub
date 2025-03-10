@@ -45,6 +45,28 @@ export class MirrorBall {
         }
     }
 
+    createReflectionSpots() {
+        const count = 40;
+        const spotGeometry = new THREE.PlaneGeometry(0.2, 0.2);
+        const spotMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+
+        for (let i = 0; i < count; i++) {
+            const spot = new THREE.Mesh(spotGeometry, spotMaterial);
+            spot.visible = false;
+            this.reflectionSpots.push({
+                mesh: spot,
+                facetIndex: Math.floor(Math.random() * this.group.children.length)
+            });
+        }
+    }
+
     update(time) {
         this.group.rotation.y += 0.005;
         this.updateReflections(time);
