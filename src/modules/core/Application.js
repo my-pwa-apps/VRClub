@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { Renderer } from './Renderer.js';
 import { Scene } from './Scene.js';
 import { Camera } from './Camera.js';
