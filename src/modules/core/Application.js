@@ -23,7 +23,7 @@ export class Application {
         this.systems = {
             lighting: new LightingSystem(this.scene, this.resources),
             environment: new EnvironmentSystem(this.scene, this.resources),
-            characters: new CharacterSystem(this.scene, this.resources),
+            characters: new CharacterSystem(this.scene), // Only pass the scene
             input: new InputSystem(this.camera)
         };
 
