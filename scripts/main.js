@@ -7,6 +7,7 @@ let moveForward = false, moveBackward = false, moveLeft = false, moveRight = fal
 let velocity = new THREE.Vector3();
 let direction = new THREE.Vector3();
 const clock = new THREE.Clock();
+let lightArmatures = [];
 
 async function init() {
     scene = new THREE.Scene();
@@ -156,7 +157,6 @@ async function createClubEnvironment() {
 }
 
 function createLightingArmatures() {
-    // Create truss system
     const trussMaterial = new THREE.MeshStandardMaterial({
         color: 0x333333,
         metalness: 0.8,
@@ -173,14 +173,69 @@ function createLightingArmatures() {
         truss.position.set(x, 9.8, 0);
         scene.add(truss);
         
-        // Add mounting points for lights
+        // Add mounting points with moving light heads
         const mountPoints = [-8, -4, 0, 4, 8];
         mountPoints.forEach(z => {
-            const mount = createLightMount();
-            mount.position.set(x, 9.7, z);
-            scene.add(mount);
+            const armature = createMovingLightArmature();
+            armature.position.set(x, 9.7, z);
+            scene.add(armature.group);
+            lightArmatures.push(armature);
         });
     });
+}
+
+function createMovingLightArmature() {
+    const group = new THREE.Group();
+    
+    // Base mount
+    const base = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.15, 0.3),
+        new THREE.MeshStandardMaterial({
+            color: 0x111111,
+            metalness: 0.9,
+            roughness: 0.2
+        })
+    );
+    group.add(base);
+    
+    // Moving head
+    const head = new THREE.Group();
+    
+    // Light housing
+    const housing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.4, 0.2),
+        new THREE.MeshStandardMaterial({
+            color: 0x222222,
+            metalness: 0.8,
+            roughness: 0.2
+        })
+    );
+    head.add(housing);
+    
+    // Lens
+    const lens = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.12, 0.1, 16),
+        new THREE.MeshPhongMaterial({
+            color: 0xffffff,
+            emissive: 0xffffff,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        })
+    );
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0, -0.2, 0);
+    head.add(lens);
+    
+    head.position.y = -0.3;
+    group.add(head);
+    
+    return {
+        group: group,
+        head: head,
+        lens: lens,
+        basePosition: group.position.clone()
+    };
 }
 
 function createLightMount() {
@@ -424,9 +479,13 @@ function debounce(fn, ms) {
 
 function animate() {
     const delta = clock.getDelta();
+    const time = clock.getElapsedTime();
     
     // Update movement based on keyboard controls
     updateMovement(delta);
+    
+    // Update light armatures
+    updateLightArmatures(time);
     
     // Update controls and render scene
     controls.update();
@@ -456,6 +515,27 @@ function updateMovement(delta) {
     if (camera.position.x < -9.5) camera.position.x = -9.5;
     if (camera.position.z < -9.5) camera.position.z = -9.5;
     if (camera.position.z > 9.5) camera.position.z = 9.5;
+}
+
+function updateLightArmatures(time) {
+    // Calculate synchronized movement
+    const angle = time * 0.5;
+    const rotationX = Math.sin(angle) * 0.5;
+    const rotationZ = Math.cos(angle) * 0.5;
+    
+    // Calculate color based on time
+    const hue = (Math.sin(time * 0.2) + 1) / 2;
+    const color = new THREE.Color().setHSL(hue, 1, 0.5);
+    
+    lightArmatures.forEach(armature => {
+        // Update head rotation
+        armature.head.rotation.x = rotationX;
+        armature.head.rotation.z = rotationZ;
+        
+        // Update lens color
+        armature.lens.material.color = color;
+        armature.lens.material.emissive = color;
+    });
 }
 
 init().catch(console.error);
