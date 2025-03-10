@@ -252,25 +252,19 @@ function createLightingArmatures() {
         
         // Add light fixtures with realistic beams
         [-8, -4, 0, 4, 8].forEach(z => {
+            // Use the same initial color for all fixtures
+            const initialColor = 0xff0000; // Start with red
+            
             // Create light fixture
-            const fixture = createLightFixture(new THREE.Vector3(x, 9.7, z), getRandomColor());
+            const fixture = createLightFixture(new THREE.Vector3(x, 9.7, z), initialColor);
+            
+            // Store the side information (left or right)
+            fixture.isOnRightSide = x > 0;
+            
             scene.add(fixture.group);
             lightArmatures.push(fixture);
         });
     });
-}
-
-function getRandomColor() {
-    // Create saturated colors for club lights
-    const colors = [
-        0xff0000, // red
-        0x00ff00, // green
-        0x0000ff, // blue
-        0xff00ff, // magenta
-        0xffff00, // yellow
-        0x00ffff  // cyan
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
 }
 
 // Simplify the fixture creation to use simpler materials
@@ -361,7 +355,7 @@ function createLightFixture(position, color) {
     };
 }
 
-// Updated function to adjust beam geometry based on head rotation
+// Updated function to make lights move in opposite directions based on side
 function updateLightArmatures(time) {
     if (!lightArmatures || lightArmatures.length === 0) {
         return;
@@ -379,31 +373,36 @@ function updateLightArmatures(time) {
         
         if (!fixture || !fixture.head) continue;
         
-        // Calculate rotation for this fixture
-        const speed = 0.15 + (i % 5) * 0.05;
-        const phaseX = i * 0.5;
-        const phaseZ = i * 0.7;
+        // Determine movement direction based on which side the fixture is on
+        // Right side fixtures move left, left side fixtures move right
+        let rotationDirection = fixture.isOnRightSide ? -1 : 1;
         
-        // Apply rotation to the head
-        fixture.head.rotation.x = Math.sin(time * speed + phaseX) * 0.8 - 0.2;
-        fixture.head.rotation.z = Math.cos(time * speed * 0.7 + phaseZ) * 0.5;
+        // Calculate rotation for this fixture - shared pattern by side
+        const pattern = Math.sin(time * 0.3) * 1.2 * rotationDirection;
         
-        // Update color of spotlight and beam to the shared color
+        // Apply vertical rotation (up/down)
+        fixture.head.rotation.x = Math.sin(time * 0.2 + i * 0.1) * 0.6 - 0.3; // Tilt down slightly
+        
+        // Apply horizontal rotation (left/right) - this creates the crossing pattern
+        fixture.head.rotation.z = pattern;
+        
+        // Update color of spotlight to the shared color
         if (fixture.spotlight) {
             fixture.spotlight.color.copy(sharedColor);
-            // Increase spotlight intensity to compensate for darker environment
             fixture.spotlight.intensity = 7.0 + Math.sin(time * 2) * 1.0;
         }
         
+        // Update color of lens to the shared color
         if (fixture.lens && fixture.lens.material) {
             fixture.lens.material.color.copy(sharedColor);
-            if (fixture.lens.material.emissive) {
-                fixture.lens.material.emissive.copy(sharedColor);
-            }
         }
         
         // Update beam to extend to floor based on current rotation
-        if (fixture.beam && fixture.position) {
+        if (fixture.beam && fixture.beam.material) {
+            // Update beam color to match shared color
+            fixture.beam.material.color.copy(sharedColor);
+            fixture.beam.material.opacity = 0.25 + Math.sin(time * 2 + i) * 0.05;
+            
             // Get the world position and direction of the spotlight
             const lightWorldPos = new THREE.Vector3();
             fixture.head.getWorldPosition(lightWorldPos);
@@ -420,11 +419,6 @@ function updateLightArmatures(time) {
             if (distance > 0 && fixture.beam.geometry) {
                 // Scale the beam to match the required length
                 fixture.beam.scale.y = distance / fixture.beamLength;
-                
-                // Update opacity based on time
-                if (fixture.beam.material) {
-                    fixture.beam.material.opacity = 0.25 + Math.sin(time * 2 + i) * 0.05;
-                }
             }
         }
     }
