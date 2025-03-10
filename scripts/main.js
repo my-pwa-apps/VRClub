@@ -381,38 +381,8 @@ function createSmokeEmitters() {
 }
 
 function createSmokeEffects() {
-    // Create smoke particles
-    const smokeTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/smoke.png');
-    const smokeMaterial = new THREE.SpriteMaterial({ 
-        map: smokeTexture,
-        transparent: true,
-        opacity: 0.4,
-        color: 0xaaaaaa
-    });
-    
-    for (let i = 0; i < 50; i++) {
-        const particle = new THREE.Sprite(smokeMaterial.clone());
-        particle.position.set(
-            (Math.random() - 0.5) * 18,
-            Math.random() * 8,
-            (Math.random() - 0.5) * 18
-        );
-        particle.scale.set(2 + Math.random() * 3, 2 + Math.random() * 3, 1);
-        particle.userData = {
-            velocity: new THREE.Vector3(
-                (Math.random() - 0.5) * 0.02,
-                (Math.random() - 0.5) * 0.02,
-                (Math.random() - 0.5) * 0.02
-            ),
-            rotation: Math.random() * 0.06 - 0.03,
-            opacity: { 
-                value: 0.3 + Math.random() * 0.3,
-                delta: (Math.random() - 0.5) * 0.01
-            }
-        };
-        scene.add(particle);
-        smokeParticles.push(particle);
-    }
+    // Initialize particle pool first
+    initParticlePool();
     
     // Add fog to the scene
     scene.fog = new THREE.FogExp2(0x000000, 0.02);
@@ -497,12 +467,14 @@ function updateLightingEffects(delta) {
 function updateSmokeEffects(delta) {
     const time = clock.getElapsedTime();
     
-    smokeParticles.forEach(particle => {
+    // Update existing particles
+    smokeParticles.forEach((particle, index) => {
+        if (!particle.visible) return;
+        
         particle.userData.life += delta;
         
         if (particle.userData.life > particle.userData.maxLife) {
-            particle.visible = false;
-            particlePool.add(particle);
+            resetParticle(particle);
             return;
         }
         
@@ -511,10 +483,59 @@ function updateSmokeEffects(delta) {
         particle.position.addScaledVector(particle.userData.velocity, delta * 60);
         particle.material.opacity = (1 - t) * 0.4;
         particle.scale.addScalar(delta * 0.5);
+        
+        // Add turbulence
+        particle.userData.velocity.x += (Math.random() - 0.5) * 0.002;
+        particle.userData.velocity.z += (Math.random() - 0.5) * 0.002;
+        particle.userData.velocity.y += 0.001; // Gradual rise
     });
     
     // Emit new particles
     emitNewParticles(time);
+}
+
+function emitNewParticles(time) {
+    const emitterPositions = [
+        { x: -9, y: 0.7, z: -8 },
+        { x: 9, y: 0.7, z: -8 },
+        { x: -9, y: 0.7, z: 8 },
+        { x: 9, y: 0.7, z: 8 }
+    ];
+    
+    // Emit from each smoke machine
+    emitterPositions.forEach(pos => {
+        if (Math.random() > 0.7) { // Control emission rate
+            const particle = getParticle();
+            if (particle) {
+                resetParticle(particle, pos);
+            }
+        }
+    });
+}
+
+function resetParticle(particle, position = null) {
+    if (position) {
+        // New particle from emitter
+        particle.position.set(
+            position.x + (Math.random() - 0.5) * 0.2,
+            position.y,
+            position.z + (Math.random() - 0.5) * 0.2
+        );
+        particle.scale.set(0.5, 0.5, 1);
+        particle.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.01,
+            0.02 + Math.random() * 0.02,
+            (Math.random() - 0.5) * 0.01
+        );
+    } else {
+        // Reset expired particle
+        particle.visible = false;
+        particlePool.add(particle);
+    }
+    
+    particle.userData.life = 0;
+    particle.userData.maxLife = 3 + Math.random() * 2;
+    particle.material.opacity = 0.4;
 }
 
 function updateLaserBeams(time) {
