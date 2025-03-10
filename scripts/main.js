@@ -37,9 +37,14 @@ async function init() {
     renderer.toneMappingExposure = 1;
     renderer.physicallyCorrectLights = true;
     
-    // Basic ambient light for visibility during development
-    const ambientLight = new THREE.AmbientLight(0x404040);
+    // Add stronger ambient light for basic visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
+    
+    // Add directional light for better depth perception
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainLight.position.set(0, 10, 0);
+    scene.add(mainLight);
     
     camera.position.set(0, 1.6, 5);
     
@@ -50,14 +55,14 @@ async function init() {
 }
 
 async function createClubEnvironment() {
-    // Create materials with better textures
+    // Adjust floor material to be more visible
     const floorTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
     floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(20, 20);
     
     const floorMaterial = new THREE.MeshStandardMaterial({ 
         map: floorTexture,
-        color: 0x222222,
+        color: 0x555555,  // Lighter color
         roughness: 0.8,
         metalness: 0.2
     });
@@ -68,73 +73,66 @@ async function createClubEnvironment() {
     
     const wallMaterial = new THREE.MeshStandardMaterial({
         map: wallTexture,
-        color: 0x666666,
+        color: 0x888888,  // Lighter color
         roughness: 0.9,
         metalness: 0.1
     });
     
+    // Add environment with debug colors
+    const debugMaterials = {
+        floor: new THREE.MeshStandardMaterial({ color: 0x555555 }),
+        walls: new THREE.MeshStandardMaterial({ color: 0x888888 }),
+        ceiling: new THREE.MeshStandardMaterial({ color: 0x666666 }),
+        danceFloor: new THREE.MeshStandardMaterial({ 
+            color: 0x444444,
+            metalness: 0.7,
+            roughness: 0.2
+        })
+    };
+
     // Floor
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(20, 20),
-        floorMaterial
+        debugMaterials.floor
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
-    
-    // Dance floor area
-    const danceFloorMaterial = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        metalness: 0.7,
-        roughness: 0.2
-    });
-    
+
+    // Dance floor with distinct color
     const danceFloor = new THREE.Mesh(
         new THREE.PlaneGeometry(10, 10),
-        danceFloorMaterial
+        debugMaterials.danceFloor
     );
     danceFloor.rotation.x = -Math.PI / 2;
-    danceFloor.position.y = 0.01; // Slightly above main floor
+    danceFloor.position.y = 0.01;
     scene.add(danceFloor);
-    
-    // Walls
+
+    // Walls with simple colors for testing
     const walls = [
-        { // Back wall
-            size: [20, 10, 0.3],
-            position: [0, 5, -10],
-            rotation: [0, 0, 0]
-        },
-        { // Left wall
-            size: [0.3, 10, 20],
-            position: [-10, 5, 0],
-            rotation: [0, 0, 0]
-        },
-        { // Right wall
-            size: [0.3, 10, 20],
-            position: [10, 5, 0],
-            rotation: [0, 0, 0]
-        }
+        { size: [20, 10, 0.3], position: [0, 5, -10] },  // Back
+        { size: [0.3, 10, 20], position: [-10, 5, 0] },  // Left
+        { size: [0.3, 10, 20], position: [10, 5, 0] }    // Right
     ];
-    
+
     walls.forEach(wall => {
         const mesh = new THREE.Mesh(
             new THREE.BoxGeometry(...wall.size),
-            wallMaterial
+            debugMaterials.walls
         );
         mesh.position.set(...wall.position);
-        mesh.rotation.set(...wall.rotation);
         mesh.receiveShadow = true;
         scene.add(mesh);
     });
-    
-    // Ceiling with mounted light fixtures
+
+    // Ceiling
     const ceiling = new THREE.Mesh(
         new THREE.BoxGeometry(20, 0.3, 20),
-        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 })
+        debugMaterials.ceiling
     );
     ceiling.position.set(0, 10, 0);
     scene.add(ceiling);
-    
+
     // Add lighting armatures
     createLightingArmatures();
     
