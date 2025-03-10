@@ -104,13 +104,32 @@
                 document.getElementById('loading').style.display = 'none';
             }, 2000);
         });
-        // Add error handler
+        
+        // Enhanced error handler
         window.addEventListener('error', function(event) {
             const errorDiv = document.getElementById('error');
-            errorDiv.textContent = 'Error loading resources. Please refresh the page.';
+            let errorMessage = 'Error loading resources. Please refresh the page.';
+            
+            // Check for specific function declaration errors
+            if (event.error instanceof SyntaxError && event.error.message.includes('already been declared')) {
+                errorMessage = 'Duplicate function detected. Please check the console for details.';
+                console.error('Function declaration error:', event.error);
+            }
+            
+            errorDiv.textContent = errorMessage;
             errorDiv.style.display = 'block';
-            console.error('Resource loading error:', event.error);
         });
+
+        // Wrap script loading
+        try {
+            const script = document.querySelector('script[src="scripts/main.js"]');
+            script.onerror = function() {
+                document.getElementById('error').textContent = 'Failed to load main script';
+                document.getElementById('error').style.display = 'block';
+            };
+        } catch (e) {
+            console.error('Script loading error:', e);
+        }
     </script>
 </body>
 </html>
