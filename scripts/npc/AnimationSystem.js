@@ -191,6 +191,135 @@ export class AnimationSystem {
         );
     }
 
-    // Additional helper methods for other animations...
-    // ...existing code...
+    generateTalkingArmGestures(duration, fps) {
+        const times = [];
+        const values = [];
+        const frameCount = duration * fps;
+
+        for (let i = 0; i <= frameCount; i++) {
+            times.push(i / fps);
+            
+            // Subtle arm movement during talking
+            const phase = (i / frameCount) * Math.PI * 2;
+            const rightArmRotation = Math.sin(phase) * 0.2;
+            const leftArmRotation = Math.sin(phase + Math.PI * 0.5) * 0.15;
+            
+            // Right arm values
+            values.push(
+                rightArmRotation,  // X rotation
+                0,                 // Y rotation
+                Math.PI / 4        // Z rotation base pose
+            );
+        }
+
+        return new THREE.VectorKeyframeTrack(
+            '.children[3].rotation', // Right arm node
+            times,
+            values
+        );
+    }
+
+    generateGesturingArms(duration, fps) {
+        const times = [];
+        const values = [];
+        const frameCount = duration * fps;
+
+        for (let i = 0; i <= frameCount; i++) {
+            times.push(i / fps);
+            
+            // More pronounced arm movements for gesturing
+            const phase = (i / frameCount) * Math.PI * 2;
+            const armRotation = Math.sin(phase) * 0.5;
+            
+            values.push(
+                armRotation,    // X rotation
+                0,             // Y rotation
+                Math.PI / 3    // Z rotation base pose
+            );
+        }
+
+        return new THREE.VectorKeyframeTrack(
+            '.children[2].rotation', // Left arm node
+            times,
+            values
+        );
+    }
+
+    generateLaughingAnimation(duration, fps) {
+        const times = [];
+        const values = [];
+        const frameCount = duration * fps;
+
+        for (let i = 0; i <= frameCount; i++) {
+            times.push(i / fps);
+            
+            // Body shaking for laugh
+            const phase = (i / frameCount) * Math.PI * 4; // Faster oscillation
+            const shakeAmount = Math.sin(phase) * 0.08;
+            
+            values.push(
+                -0.2 + shakeAmount, // X rotation (lean back + shake)
+                shakeAmount,        // Y rotation (side shake)
+                0                   // Z rotation
+            );
+        }
+
+        return new THREE.VectorKeyframeTrack(
+            '.rotation', // Body root rotation
+            times,
+            values
+        );
+    }
+
+    generateIdleBodyMovement(duration, fps) {
+        const times = [];
+        const values = [];
+        const frameCount = duration * fps;
+
+        for (let i = 0; i <= frameCount; i++) {
+            times.push(i / fps);
+            
+            // Subtle weight shifting
+            const phase = (i / frameCount) * Math.PI * 2;
+            const shift = Math.sin(phase) * 0.02;
+            
+            values.push(
+                0,     // X position
+                shift, // Y position (subtle up/down)
+                0      // Z position
+            );
+        }
+
+        return new THREE.VectorKeyframeTrack(
+            '.position',
+            times,
+            values
+        );
+    }
+
+    generateBreathingMotion(duration, fps) {
+        const times = [];
+        const values = [];
+        const frameCount = duration * fps;
+
+        for (let i = 0; i <= frameCount; i++) {
+            times.push(i / fps);
+            
+            // Subtle breathing motion
+            const phase = (i / frameCount) * Math.PI * 2;
+            const breathe = 1 + Math.sin(phase) * 0.02;
+            
+            values.push(
+                1,       // X scale
+                breathe, // Y scale (subtle expand/contract)
+                1        // Z scale
+            );
+        }
+
+        return new THREE.VectorKeyframeTrack(
+            '.scale',
+            times,
+            values
+        );
+    }
 }
