@@ -212,17 +212,68 @@ function createDJBooth() {
     
     // Video wall behind DJ
     const videoGeometry = new THREE.PlaneGeometry(12, 8);
-    const videoElement = document.createElement('video');
-    videoElement.src = 'https://threejs.org/examples/textures/sintel.mp4'; // Replace with your video
-    videoElement.loop = true;
-    videoElement.muted = true;
-    videoElement.play();
     
-    const videoTexture = new THREE.VideoTexture(videoElement);
-    const videoMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
+    // Create video material with fallback
+    const videoMaterial = createVideoWallMaterial();
+    
     videoScreen = new THREE.Mesh(videoGeometry, videoMaterial);
     videoScreen.position.set(0, 5, -9.8);
     scene.add(videoScreen);
+}
+
+function createVideoWallMaterial() {
+    // Try to load video first
+    const videoElement = document.createElement('video');
+    videoElement.crossOrigin = "anonymous"; // Add CORS header
+    
+    // Create a default animated material as fallback
+    const fallbackMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            time: { value: 0 },
+            resolution: { value: new THREE.Vector2(1024, 1024) }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform float time;
+            uniform vec2 resolution;
+            varying vec2 vUv;
+            
+            void main() {
+                vec2 p = (gl_FragCoord.xy / resolution.xy) * 2.0 - 1.0;
+                vec3 color = vec3(0.0);
+                float t = time * 0.5;
+                
+                // Create animated pattern
+                for(float i = 1.0; i < 4.0; i++) {
+                    p.x += 0.6 / i * cos(i * 2.5 * p.y + t);
+                    p.y += 0.6 / i * cos(i * 1.5 * p.x + t);
+                }
+                
+                color = vec3(0.1, 0.5 + 0.5 * sin(p.x), 0.5 + 0.5 * cos(p.y));
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `
+    });
+    
+    // Try to load local video first, then fallback to remote, then shader
+    try {
+        videoElement.src = 'assets/visuals.mp4'; // Local video file
+        videoElement.loop = true;
+        videoElement.muted = true;
+        videoElement.play();
+        
+        const videoTexture = new THREE.VideoTexture(videoElement);
+        return new THREE.MeshBasicMaterial({ map: videoTexture });
+    } catch (error) {
+        console.warn('Video loading failed, using fallback shader pattern');
+        return fallbackMaterial;
+    }
 }
 
 function createClubLighting() {
@@ -411,6 +462,12 @@ function animate() {
     // Update controls and render scene
     controls.update();
     renderer.render(scene, camera);
+
+    // Update video wall shader if using fallback
+    const material = videoScreen.material;
+    if (material.type === 'ShaderMaterial') {
+        material.uniforms.time.value = time;
+    }
 }
 
 function updateMovement(delta) {
