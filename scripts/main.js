@@ -38,69 +38,91 @@ async function init() {
     renderer.toneMappingExposure = 1;
     renderer.physicallyCorrectLights = true;
     
-    // Add stronger ambient light for basic visibility
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Add much stronger ambient light for basic visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Increased intensity
     scene.add(ambientLight);
     
     // Add directional light for better depth perception
-    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    mainLight.position.set(0, 10, 0);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0); // Increased intensity
+    mainLight.position.set(5, 10, 5);
     scene.add(mainLight);
     
     camera.position.set(0, 1.6, 5);
     
-    await createClubEnvironment();
-    setupEventListeners();
+    // Add keyboard controls
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    
+    try {
+        await createClubEnvironment();
+        setupEventListeners();
+        
+        // Log successful initialization
+        console.log('Club environment created successfully');
+    } catch (error) {
+        console.error('Error initializing club:', error);
+    }
     
     renderer.setAnimationLoop(animate);
 }
 
+function onKeyDown(event) {
+    switch (event.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+            moveForward = true;
+            break;
+        case 'ArrowDown':
+        case 'KeyS':
+            moveBackward = true;
+            break;
+        case 'ArrowLeft':
+        case 'KeyA':
+            moveLeft = true;
+            break;
+        case 'ArrowRight':
+        case 'KeyD':
+            moveRight = true;
+            break;
+    }
+}
+
+function onKeyUp(event) {
+    switch (event.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+            moveForward = false;
+            break;
+        case 'ArrowDown':
+        case 'KeyS':
+            moveBackward = false;
+            break;
+        case 'ArrowLeft':
+        case 'KeyA':
+            moveLeft = false;
+            break;
+        case 'ArrowRight':
+        case 'KeyD':
+            moveRight = false;
+            break;
+    }
+}
+
 async function createClubEnvironment() {
-    // Create wood floor material
-    const woodTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
-    const woodNormalMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_normal.jpg');
-    const woodRoughMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_roughness.jpg');
-    
-    woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
-    woodNormalMap.wrapS = woodNormalMap.wrapT = THREE.RepeatWrapping;
-    woodRoughMap.wrapS = woodRoughMap.wrapT = THREE.RepeatWrapping;
-    
-    woodTexture.repeat.set(8, 8);
-    woodNormalMap.repeat.set(8, 8);
-    woodRoughMap.repeat.set(8, 8);
-    
+    // Add basic placeholder materials in case textures fail to load
     const floorMaterial = new THREE.MeshStandardMaterial({ 
-        map: woodTexture,
-        normalMap: woodNormalMap,
-        roughnessMap: woodRoughMap,
-        color: 0xbbbbbb,
+        color: 0x555555,
         roughness: 0.8,
         metalness: 0.1
     });
     
-    // Create stone wall material
-    const stoneTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/stone/stone_diffuse.jpg');
-    const stoneNormalMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/stone/stone_normal.jpg');
-    const stoneRoughMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/stone/stone_roughness.jpg');
-    
-    stoneTexture.wrapS = stoneTexture.wrapT = THREE.RepeatWrapping;
-    stoneNormalMap.wrapS = stoneNormalMap.wrapT = THREE.RepeatWrapping;
-    stoneRoughMap.wrapS = stoneRoughMap.wrapT = THREE.RepeatWrapping;
-    
-    stoneTexture.repeat.set(6, 3);
-    stoneNormalMap.repeat.set(6, 3);
-    stoneRoughMap.repeat.set(6, 3);
-    
     const wallMaterial = new THREE.MeshStandardMaterial({
-        map: stoneTexture,
-        normalMap: stoneNormalMap,
-        roughnessMap: stoneRoughMap,
         color: 0x888888,
         roughness: 1.0,
         metalness: 0.0
     });
 
-    // Floor
+    // Floor with fallback material
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(20, 20),
         floorMaterial
@@ -154,6 +176,15 @@ async function createClubEnvironment() {
     // Create detailed areas
     createDJBooth();
     createBar();
+
+    // Try to load textures after basic geometry is in place
+    try {
+        const woodTexture = await new THREE.TextureLoader().loadAsync('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+        floorMaterial.map = woodTexture;
+        floorMaterial.needsUpdate = true;
+    } catch (error) {
+        console.warn('Failed to load wood texture:', error);
+    }
 }
 
 function createLightingArmatures() {
