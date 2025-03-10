@@ -55,60 +55,74 @@ async function init() {
 }
 
 async function createClubEnvironment() {
-    // Adjust floor material to be more visible
-    const floorTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
-    floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(20, 20);
+    // Create wood floor material
+    const woodTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+    const woodNormalMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_normal.jpg');
+    const woodRoughMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/hardwood2_roughness.jpg');
+    
+    woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
+    woodNormalMap.wrapS = woodNormalMap.wrapT = THREE.RepeatWrapping;
+    woodRoughMap.wrapS = woodRoughMap.wrapT = THREE.RepeatWrapping;
+    
+    woodTexture.repeat.set(8, 8);
+    woodNormalMap.repeat.set(8, 8);
+    woodRoughMap.repeat.set(8, 8);
     
     const floorMaterial = new THREE.MeshStandardMaterial({ 
-        map: floorTexture,
-        color: 0x555555,  // Lighter color
+        map: woodTexture,
+        normalMap: woodNormalMap,
+        roughnessMap: woodRoughMap,
+        color: 0xbbbbbb,
         roughness: 0.8,
-        metalness: 0.2
-    });
-    
-    const wallTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/brick_diffuse.jpg');
-    wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
-    wallTexture.repeat.set(4, 2);
-    
-    const wallMaterial = new THREE.MeshStandardMaterial({
-        map: wallTexture,
-        color: 0x888888,  // Lighter color
-        roughness: 0.9,
         metalness: 0.1
     });
     
-    // Add environment with debug colors
-    const debugMaterials = {
-        floor: new THREE.MeshStandardMaterial({ color: 0x555555 }),
-        walls: new THREE.MeshStandardMaterial({ color: 0x888888 }),
-        ceiling: new THREE.MeshStandardMaterial({ color: 0x666666 }),
-        danceFloor: new THREE.MeshStandardMaterial({ 
-            color: 0x444444,
-            metalness: 0.7,
-            roughness: 0.2
-        })
-    };
+    // Create stone wall material
+    const stoneTexture = new THREE.TextureLoader().load('https://threejs.org/examples/textures/stone/stone_diffuse.jpg');
+    const stoneNormalMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/stone/stone_normal.jpg');
+    const stoneRoughMap = new THREE.TextureLoader().load('https://threejs.org/examples/textures/stone/stone_roughness.jpg');
+    
+    stoneTexture.wrapS = stoneTexture.wrapT = THREE.RepeatWrapping;
+    stoneNormalMap.wrapS = stoneNormalMap.wrapT = THREE.RepeatWrapping;
+    stoneRoughMap.wrapS = stoneRoughMap.wrapT = THREE.RepeatWrapping;
+    
+    stoneTexture.repeat.set(6, 3);
+    stoneNormalMap.repeat.set(6, 3);
+    stoneRoughMap.repeat.set(6, 3);
+    
+    const wallMaterial = new THREE.MeshStandardMaterial({
+        map: stoneTexture,
+        normalMap: stoneNormalMap,
+        roughnessMap: stoneRoughMap,
+        color: 0x888888,
+        roughness: 1.0,
+        metalness: 0.0
+    });
 
     // Floor
     const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(20, 20),
-        debugMaterials.floor
+        floorMaterial
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Dance floor with distinct color
+    // Dance floor with distinct material
     const danceFloor = new THREE.Mesh(
         new THREE.PlaneGeometry(10, 10),
-        debugMaterials.danceFloor
+        new THREE.MeshStandardMaterial({ 
+            color: 0x333333,
+            metalness: 0.7,
+            roughness: 0.2,
+            envMapIntensity: 1.5
+        })
     );
     danceFloor.rotation.x = -Math.PI / 2;
     danceFloor.position.y = 0.01;
     scene.add(danceFloor);
 
-    // Walls with simple colors for testing
+    // Walls
     const walls = [
         { size: [20, 10, 0.3], position: [0, 5, -10] },  // Back
         { size: [0.3, 10, 20], position: [-10, 5, 0] },  // Left
@@ -118,7 +132,7 @@ async function createClubEnvironment() {
     walls.forEach(wall => {
         const mesh = new THREE.Mesh(
             new THREE.BoxGeometry(...wall.size),
-            debugMaterials.walls
+            wallMaterial
         );
         mesh.position.set(...wall.position);
         mesh.receiveShadow = true;
@@ -128,7 +142,7 @@ async function createClubEnvironment() {
     // Ceiling
     const ceiling = new THREE.Mesh(
         new THREE.BoxGeometry(20, 0.3, 20),
-        debugMaterials.ceiling
+        new THREE.MeshStandardMaterial({ color: 0x666666 })
     );
     ceiling.position.set(0, 10, 0);
     scene.add(ceiling);
