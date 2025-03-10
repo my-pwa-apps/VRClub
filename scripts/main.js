@@ -2,85 +2,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
+import { NPCManager } from './npc/NPCManager.js';
+
 let scene, camera, renderer, controls;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 let velocity = new THREE.Vector3();
 let direction = new THREE.Vector3();
 const clock = new THREE.Clock();
-let lightArmatures = [];
-let dancers = [];
-let stationaryDust; // Add this global variable declaration
 
-function createStationaryDustParticles() {
-    const particles = new THREE.Group();
-    const particleCount = 300;
-    const volume = new THREE.Box3(
-        new THREE.Vector3(-8, 0, -8),
-        new THREE.Vector3(8, 7, 8)
-    );
-    
-    // Create a shared geometry for performance
-    const particleGeometry = new THREE.SphereGeometry(0.02, 4, 4);
-    
-    // Create a collection of materials with different opacities
-    const materials = [
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.3,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.2,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        }),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.1,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        })
-    ];
-    
-    for (let i = 0; i < particleCount; i++) {
-        const material = materials[Math.floor(Math.random() * materials.length)].clone();
-        const particle = new THREE.Mesh(particleGeometry, material);
-        
-        // Position randomly within the volume
-        particle.position.set(
-            volume.min.x + Math.random() * (volume.max.x - volume.min.x),
-            volume.min.y + Math.random() * (volume.max.y - volume.min.y),
-            volume.min.z + Math.random() * (volume.max.z - volume.min.z)
-        );
-        
-        // Random scale for variety
-        const scale = 0.3 + Math.random() * 0.7;
-        particle.scale.set(scale, scale, scale);
-        
-        // Store original color and state
-        particle.userData = {
-            originalOpacity: material.opacity,
-            illuminated: false,
-            illuminationColor: new THREE.Color(),
-            illuminationIntensity: 0,
-            driftVelocity: new THREE.Vector3(
-                (Math.random() - 0.5) * 0.002,
-                (Math.random() - 0.5) * 0.001,
-                (Math.random() - 0.5) * 0.002
-            )
-        };
-        
-        particles.add(particle);
-    }
-    
-    scene.add(particles);
-    return particles;
-}
+let npcManager;
 
 async function init() {
     scene = new THREE.Scene();
@@ -149,6 +79,9 @@ async function init() {
     renderer.outputEncoding = THREE.LinearEncoding; // Use simpler encoding
     renderer.toneMapping = THREE.NoToneMapping; // Disable tone mapping
     renderer.shadowMap.type = THREE.BasicShadowMap; // Use simpler shadow mapping
+
+    npcManager = new NPCManager(scene);
+    await npcManager.initialize(25); // Create 25 NPCs
 
     try {
         await createClubEnvironment();
@@ -1949,6 +1882,11 @@ function animate() {
         // Rotate mirror ball and update reflections
         updateMirrorBall(delta, time);
         
+        // Update NPCs
+        if (npcManager) {
+            npcManager.update(delta);
+        }
+        
         // Update dancers if they exist
         if (dancers.length > 0 && typeof updateDancers === 'function') {
             updateDancers(time);
@@ -1963,11 +1901,6 @@ function animate() {
         renderer.render(scene, camera);
     } catch (error) {
         console.error('Animation error:', error);
-        if (renderer && renderer.setAnimationLoop) {
-            renderer.setAnimationLoop(null);
-            document.getElementById('error').textContent = 'Rendering error: ' + error.message;
-            document.getElementById('error').style.display = 'block';
-        }
     }
 }
 
