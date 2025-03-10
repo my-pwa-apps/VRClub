@@ -1723,83 +1723,212 @@ function checkWebGLCompatibility() {
     }
 }
 
-// Add this function before it's referenced in createClubEnvironment
+// Enhanced mirror ball creation with reflection capabilities
 function createMirrorBall() {
-    // Create a mirror ball geometry
-    const ballGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const mirrorBallGroup = new THREE.Group();
     
-    // Create a highly reflective material for the mirror ball
-    const ballMaterial = new THREE.MeshStandardMaterial({
+    // Create main ball with highly reflective material
+    const ballGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const ballMaterial = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 1.0,
-        roughness: 0.1,
-        envMapIntensity: 1.0
+        roughness: 0.05,
+        envMapIntensity: 2.0,
+        reflectivity: 1.0
     });
     
-    // Create small mirror faces to simulate disco ball
-    const facesGroup = new THREE.Group();
-    const faceCount = 150; // Number of mirror faces
+    const mirrorBall = new THREE.Mesh(ballGeometry, ballMaterial);
+    mirrorBallGroup.add(mirrorBall);
     
-    for (let i = 0; i < faceCount; i++) {
-        // Create a small reflective quad for each mirror face
-        const faceGeometry = new THREE.PlaneGeometry(0.08, 0.08);
-        const faceMaterial = new THREE.MeshStandardMaterial({
+    // Create mirror facets with improved reflectivity
+    const facetCount = 200;
+    const facetGroup = new THREE.Group();
+    
+    for (let i = 0; i < facetCount; i++) {
+        const facetSize = 0.08 + Math.random() * 0.04;
+        const facetGeometry = new THREE.PlaneGeometry(facetSize, facetSize);
+        const facetMaterial = new THREE.MeshPhysicalMaterial({
             color: 0xffffff,
             metalness: 1.0,
-            roughness: 0.05,
-            envMapIntensity: 1.5
+            roughness: 0.02,
+            envMapIntensity: 3.0,
+            reflectivity: 1.0
         });
         
-        const face = new THREE.Mesh(faceGeometry, faceMaterial);
+        const facet = new THREE.Mesh(facetGeometry, facetMaterial);
         
-        // Position randomly on the sphere
+        // Position on sphere surface with slight randomness
         const phi = Math.acos(-1 + 2 * Math.random());
         const theta = 2 * Math.PI * Math.random();
+        const radius = 0.5 + (Math.random() * 0.01 - 0.005);
         
-        face.position.x = 0.5 * Math.sin(phi) * Math.cos(theta);
-        face.position.y = 0.5 * Math.sin(phi) * Math.sin(theta);
-        face.position.z = 0.5 * Math.cos(phi);
+        facet.position.x = radius * Math.sin(phi) * Math.cos(theta);
+        facet.position.y = radius * Math.sin(phi) * Math.sin(theta);
+        facet.position.z = radius * Math.cos(phi);
         
-        // Orient face outward from the center
-        face.lookAt(0, 0, 0);
-        face.position.multiplyScalar(1.01); // Slightly outside the sphere
+        // Align with surface normal
+        facet.lookAt(0, 0, 0);
+        facet.userData = {
+            initialPosition: facet.position.clone(),
+            reflectionDirection: facet.position.clone().normalize()
+        };
         
-        facesGroup.add(face);
+        facetGroup.add(facet);
     }
     
-    // Create the core ball
-    const mirrorBall = new THREE.Mesh(ballGeometry, ballMaterial);
-    mirrorBall.add(facesGroup);
+    mirrorBallGroup.add(facetGroup);
     
-    // Position the ball in the club center
-    mirrorBall.position.set(0, 6, 0);
-    
-    // Add to scene with rotation info for animation
-    mirrorBall.userData = {
-        rotationSpeed: 0.05 // Controls the rotation speed
+    // Position and add rotation data
+    mirrorBallGroup.position.set(0, 6, 0);
+    mirrorBallGroup.userData = {
+        rotationSpeed: 0.05,
+        facets: facetGroup,
+        reflectionSpots: [] // Will store reflection spots
     };
     
-    scene.add(mirrorBall);
+    // Create spotlight to illuminate the ball
+    const spotLight = new THREE.SpotLight(0xffffff, 2.0);
+    spotLight.position.set(0, 9.5, 0);
+    spotLight.target = mirrorBallGroup;
+    spotLight.angle = Math.PI / 10;
+    spotLight.penumbra = 0.3;
+    spotLight.decay = 1.5;
+    spotLight.distance = 10;
+    scene.add(spotLight);
+    scene.add(spotLight.target);
     
-    // Create subtle point light in the ball to enhance reflections
-    const ballLight = new THREE.PointLight(0xffffff, 0.3);
-    ballLight.position.copy(mirrorBall.position);
-    scene.add(ballLight);
+    // Create dynamic light reflection spots
+    createMirrorBallReflections(mirrorBallGroup, 40);
     
-    // Create mirror ball projector light
-    const projectorLight = new THREE.SpotLight(0xffffff, 1.5);
-    projectorLight.position.set(0, 9.5, 0); // Just below ceiling
-    projectorLight.target = mirrorBall;
-    projectorLight.angle = Math.PI / 10;
-    projectorLight.penumbra = 0.2;
-    projectorLight.castShadow = false;
-    scene.add(projectorLight);
-    scene.add(projectorLight.target);
-    
-    return mirrorBall;
+    scene.add(mirrorBallGroup);
+    return mirrorBallGroup;
 }
 
-// Modify the animate function to store stationaryDust globally
+// New function to create reflection spots for the mirror ball
+function createMirrorBallReflections(mirrorBall, count) {
+    // Create spots that will be projected onto surfaces
+    for (let i = 0; i < count; i++) {
+        const spotGeometry = new THREE.PlaneGeometry(0.2, 0.2);
+        const spotMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true, 
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        
+        const spot = new THREE.Mesh(spotGeometry, spotMaterial);
+        spot.visible = false; // Start invisible
+        
+        scene.add(spot);
+        mirrorBall.userData.reflectionSpots.push({
+            mesh: spot,
+            facetIndex: Math.floor(Math.random() * mirrorBall.userData.facets.children.length)
+        });
+    }
+}
+
+// Enhanced function to update mirror ball and its reflections
+function updateMirrorBall(delta, time) {
+    scene.traverse(object => {
+        if (object.userData && object.userData.rotationSpeed !== undefined) {
+            // Rotate ball
+            object.rotation.y += object.userData.rotationSpeed * delta;
+            
+            // Update reflections
+            updateMirrorBallReflections(object, time);
+        }
+    });
+}
+
+// New function to calculate and update mirror ball light reflections
+function updateMirrorBallReflections(mirrorBall, time) {
+    if (!mirrorBall.userData.reflectionSpots || !mirrorBall.userData.facets) return;
+    
+    // Find surfaces that can receive reflections
+    const surfaces = [];
+    scene.traverse(obj => {
+        if (obj.isMesh && 
+            !obj.userData.isLight && 
+            !obj.userData.isBeam && 
+            obj !== mirrorBall && 
+            !mirrorBall.userData.facets.children.includes(obj)) {
+            surfaces.push(obj);
+        }
+    });
+    
+    if (surfaces == 0) return;
+    
+    // Create raycaster for finding reflection spots
+    const raycaster = new THREE.Raycaster();
+    const ballPosition = mirrorBall.position.clone();
+    const lightPosition = new THREE.Vector3(0, 9.5, 0); // Position of light shining on ball
+    
+    // Update each reflection spot
+    mirrorBall.userData.reflectionSpots.forEach((spot, index) => {
+        // Get a facet for this reflection
+        const facets = mirrorBall.userData.facets.children;
+        const facet = facets[spot.facetIndex];
+        
+        // Get facet world position
+        const facetWorldPos = facet.getWorldPosition(new THREE.Vector3());
+        
+        // Calculate incident light direction (from light to facet)
+        const incidentDir = new THREE.Vector3()
+            .subVectors(facetWorldPos, lightPosition)
+            .normalize();
+        
+        // Get facet normal in world space
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(mirrorBall.matrixWorld);
+        const normal = facet.position.clone().normalize();
+        normal.applyMatrix3(normalMatrix).normalize();
+        
+        // Calculate reflection direction using formula: r = i - 2(i·n)n
+        const reflectionDir = incidentDir.clone()
+            .sub(normal.multiplyScalar(2 * incidentDir.dot(normal)))
+            .normalize();
+        
+        // Cast ray from facet in reflection direction
+        raycaster.set(facetWorldPos, reflectionDir);
+        
+        // Find intersection with surfaces
+        const intersects = raycaster.intersectObjects(surfaces);
+        
+        if (intersects.length > 0) {
+            const hitPoint = intersects[0].point;
+            const hitNormal = intersects[0].face.normal.clone();
+            hitNormal.transformDirection(intersects[0].object.matrixWorld);
+            
+            // Position spot at hit point with slight offset
+            spot.mesh.position.copy(hitPoint);
+            spot.mesh.position.addScaledVector(hitNormal, 0.01);
+            
+            // Orient spot to face surface normal
+            spot.mesh.lookAt(hitPoint.clone().add(hitNormal));
+            
+            // Size based on distance and pulsing
+            const dist = hitPoint.distanceTo(ballPosition);
+            const spotSize = 0.15 + 0.05 * dist + Math.sin(time * 2 + index) * 0.05;
+            spot.mesh.scale.set(spotSize, spotSize, 1);
+            
+            // Add color variance to reflections
+            const hue = (Math.sin(time * 0.2 + index * 0.5) + 1) / 2;
+            const color = new THREE.Color().setHSL(hue, 0.5, 0.8);
+            spot.mesh.material.color.copy(color);
+            
+            // Opacity based on angle and randomly shifting
+            const dotProduct = Math.abs(reflectionDir.dot(hitNormal));
+            spot.mesh.material.opacity = 0.6 * (1 - dotProduct) + 0.2 + Math.sin(time * 3 + index * 2) * 0.1;
+            
+            spot.mesh.visible = true;
+        } else {
+            spot.mesh.visible = false;
+        }
+    });
+}
+
+// Update the animate function to properly call updateMirrorBall with time
 function animate() {
     try {
         const delta = clock.getDelta();
@@ -1813,8 +1942,8 @@ function animate() {
         // Always update light effects
         updateLightArmatures(time);
         
-        // Rotate mirror ball
-        updateMirrorBall(delta);
+        // Rotate mirror ball and update reflections
+        updateMirrorBall(delta, time);
         
         // Update dancers if they exist
         if (dancers.length > 0 && typeof updateDancers === 'function') {
