@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { MovingLight } from './MovingLight.js';
 import { MirrorBall } from './MirrorBall.js';
 import { StationaryDust } from './StationaryDust.js';
