@@ -82,8 +82,11 @@ export class Application {
             const delta = this.clock.getDelta();
             const time = this.clock.getElapsedTime();
 
+            // Fix: Access the actual WebGLRenderer instance through our wrapper
+            const isVRPresenting = this.renderer.renderer?.xr?.isPresenting;
+
             // Update systems
-            if (!this.renderer.xr.isPresenting) {
+            if (!isVRPresenting) {
                 this.systems.input.update(delta);
             }
             
