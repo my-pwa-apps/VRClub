@@ -292,10 +292,10 @@ function createLightFixture(position, color) {
         })
     );
     
-    // Add lens that glows with light color
+    // Add lens that glows with light color - using MeshPhongMaterial instead of MeshBasicMaterial
     const lens = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.12, 0.05, 16),
-        new THREE.MeshBasicMaterial({
+        new THREE.MeshPhongMaterial({
             color: color,
             emissive: color,
             emissiveIntensity: 1,
@@ -325,7 +325,7 @@ function createLightFixture(position, color) {
     target.position.set(0, -10, 0); // Point down by default
     spotlight.target = target;
     
-    // Create volumetric beam
+    // Create volumetric beam - keep as MeshBasicMaterial but remove emissive
     const beamGeometry = new THREE.CylinderGeometry(0.05, 0.8, 15, 16, 10, true);
     const beamMaterial = new THREE.MeshBasicMaterial({
         color: color,
@@ -665,10 +665,10 @@ function createCDJ(useEmissive = false) {
         bodyMaterial
     );
     
-    // Add display screen with glow
+    // Add display screen with glow - using MeshPhongMaterial instead of MeshBasicMaterial
     const screen = new THREE.Mesh(
         new THREE.PlaneGeometry(0.5, 0.3),
-        new THREE.MeshBasicMaterial({
+        new THREE.MeshPhongMaterial({
             color: 0x4444ff,
             emissive: 0x4444ff,
             emissiveIntensity: 0.5
@@ -907,8 +907,8 @@ function updateLightArmatures(time) {
             fixture.beam.material.opacity = pulseIntensity;
         }
         
-        // Update lens intensity
-        if (fixture.lens && fixture.lens.material) {
+        // Update lens intensity - check if lens and material exist
+        if (fixture.lens && fixture.lens.material && fixture.lens.material.emissiveIntensity !== undefined) {
             fixture.lens.material.emissiveIntensity = 1 + Math.sin(time * 3 + i) * 0.3;
         }
         
