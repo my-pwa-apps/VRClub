@@ -1109,4 +1109,30 @@ function updateMirrorBall(delta) {
     });
 }
 
+// Add the updateMovement function if it was accidentally removed
+function updateMovement(delta) {
+    // Calculate movement direction vector
+    direction.z = Number(moveForward) - Number(moveBackward);
+    direction.x = Number(moveRight) - Number(moveLeft);
+    direction.normalize();
+    
+    // Apply movement to velocity with acceleration
+    if (moveForward || moveBackward) velocity.z -= direction.z * 0.04;
+    if (moveLeft || moveRight) velocity.x -= direction.x * 0.04;
+    
+    // Apply friction/damping
+    velocity.x *= 0.9;
+    velocity.z *= 0.9;
+    
+    // Move the camera
+    camera.position.x += velocity.x;
+    camera.position.z += velocity.z;
+    
+    // Simple collision detection with walls
+    if (camera.position.x > 9.5) camera.position.x = 9.5;
+    if (camera.position.x < -9.5) camera.position.x = -9.5;
+    if (camera.position.z < -9.5) camera.position.z = -9.5;
+    if (camera.position.z > 9.5) camera.position.z = 9.5;
+}
+
 init().catch(console.error);
