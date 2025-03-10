@@ -56,4 +56,28 @@ export class NPCManager {
     positionNPCInArea(npc, area) {
         // ...implementation for positioning NPC in area based on some logic...
     }
+
+    update(deltaTime) {
+        this.npcs.forEach(npc => {
+            if (npc.mixer) {
+                npc.mixer.update(deltaTime);
+            }
+            
+            if (this.behaviorSystem) {
+                this.behaviorSystem.update(npc, deltaTime);
+            }
+            
+            this.updateLighting(npc);
+        });
+    }
+
+    updateLighting(npc) {
+        // Add subtle rim lighting to make NPCs visible in dark
+        if (!npc.rimLight) {
+            const rimLight = new THREE.PointLight(0x6666ff, 0.2, 0.5);
+            npc.add(rimLight);
+            rimLight.position.set(0, 1, -0.2);
+            npc.rimLight = rimLight;
+        }
+    }
 }
