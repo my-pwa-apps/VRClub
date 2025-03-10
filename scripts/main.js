@@ -1839,7 +1839,9 @@ function updateMirrorBall(delta, time) {
             object.rotation.y += object.userData.rotationSpeed * delta;
             
             // Update reflections
-            updateMirrorBallReflections(object, time);
+            if (object.userData.reflectionSpots) {
+                updateMirrorBallReflections(object, time);
+            }
         }
     });
 }
