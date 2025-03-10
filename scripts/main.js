@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { LightingPatterns } from './patterns.js';
 
 let scene, camera, renderer, controls;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -28,18 +29,24 @@ function init() {
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+    renderer.xr.setReferenceSpaceType('local-floor');
     
     // Add VR button
     document.getElementById('vr-button').appendChild(VRButton.createButton(renderer));
     
     // Add controls for non-VR viewing
     controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2;
     
     // Make renderer look better
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
+    renderer.physicallyCorrectLights = true;
     
     // Basic club setup
     const floorGeometry = new THREE.PlaneGeometry(20, 20);
@@ -63,6 +70,9 @@ function init() {
     
     // Create the club environment
     createClubEnvironment();
+    
+    // Setup event listeners
+    setupEventListeners();
     
     // Start animation loop
     renderer.setAnimationLoop(animate);
@@ -410,6 +420,11 @@ function createSmokeEffects() {
 
 function animate() {
     const delta = clock.getDelta();
+    const time = clock.getElapsedTime();
+    
+    // Update pattern
+    const currentPattern = Math.floor(time / PATTERN_DURATION) % LightingPatterns.patterns.length;
+    LightingPatterns.patterns[currentPattern].update(time, lights);
     
     // Update mixer animations if any
     if (mixer) mixer.update(delta);
@@ -480,47 +495,26 @@ function updateLightingEffects(delta) {
 }
 
 function updateSmokeEffects(delta) {
+    const time = clock.getElapsedTime();
+    
     smokeParticles.forEach(particle => {
-        // Move particles
-        particle.position.add(particle.userData.velocity);
+        particle.userData.life += delta;
         
-        // Rotate particles
-        particle.material.rotation += particle.userData.rotation;
-        
-        // Change opacity
-        particle.material.opacity += particle.userData.opacity.delta;
-        
-        // Reverse opacity direction at bounds
-        if (particle.material.opacity > 0.6 || particle.material.opacity < 0.2) {
-            particle.userData.opacity.delta *= -1;
+        if (particle.userData.life > particle.userData.maxLife) {
+            particle.visible = false;
+            particlePool.add(particle);
+            return;
         }
         
-        // Reset particles that move out of bounds
-        if (Math.abs(particle.position.x) > 9 || 
-            particle.position.y < 0 || 
-            particle.position.y > 9 ||
-            Math.abs(particle.position.z) > 9) {
-            
-            particle.position.set(
-                (Math.random() - 0.5) * 15,
-                Math.random() * 8,
-                (Math.random() - 0.5) * 15
-            );
-            
-            particle.userData.velocity.set(
-                (Math.random() - 0.5) * 0.02,
-                (Math.random() - 0.3) * 0.01,
-                (Math.random() - 0.5) * 0.02
-            );
-        }
-
-        // Add turbulence
-        particle.userData.velocity.x += (Math.random() - 0.5) * 0.002;
-        particle.userData.velocity.z += (Math.random() - 0.5) * 0.002;
-        
-        // Gradual rise
-        particle.userData.velocity.y += 0.0001;
+        // Optimized particle movement
+        const t = particle.userData.life / particle.userData.maxLife;
+        particle.position.addScaledVector(particle.userData.velocity, delta * 60);
+        particle.material.opacity = (1 - t) * 0.4;
+        particle.scale.addScalar(delta * 0.5);
     });
+    
+    // Emit new particles
+    emitNewParticles(time);
 }
 
 function updateLaserBeams(time) {
@@ -583,5 +577,85 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+function setupEventListeners() {
+    // Cleanup event listeners on page unload
+    window.addEventListener('unload', cleanup);
+    
+    // Optimize resize handler
+    const resizeObserver = new ResizeObserver(debounce(() => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }, 250));
+    
+    resizeObserver.observe(document.body);
+}
+
+function cleanup() {
+    // Dispose of geometries
+    scene.traverse(object => {
+        if (object.geometry) {
+            object.geometry.dispose();
+        }
+        if (object.material) {
+            if (Array.isArray(object.material)) {
+                object.material.forEach(material => material.dispose());
+            } else {
+                object.material.dispose();
+            }
+        }
+    });
+    
+    // Dispose of render target
+    renderer.dispose();
+    
+    // Clear arrays
+    lights.length = 0;
+    smokeParticles.length = 0;
+    lasers.length = 0;
+}
+
+// Optimize smoke particle updates using Object Pool
+const particlePool = new Set();
+const PARTICLE_POOL_SIZE = 100;
+
+function initParticlePool() {
+    const smokeTexture = new THREE.TextureLoader().load('smoke.png');
+    const smokeMaterial = new THREE.SpriteMaterial({
+        map: smokeTexture,
+        transparent: true,
+        opacity: 0.4
+    });
+    
+    for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+        const particle = new THREE.Sprite(smokeMaterial.clone());
+        particle.visible = false;
+        scene.add(particle);
+        particlePool.add(particle);
+    }
+}
+
+function getParticle() {
+    for (const particle of particlePool) {
+        if (!particle.visible) {
+            particle.visible = true;
+            return particle;
+        }
+    }
+    return null;
+}
+
+// Utility function for resize debouncing
+function debounce(fn, ms) {
+    let timer;
+    return () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, arguments);
+        }, ms);
+    };
+}
 
 init();
